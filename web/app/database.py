@@ -10,6 +10,7 @@
 """
 import os
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
@@ -40,9 +41,12 @@ def _build_database_url() -> str:
         mysql_password = os.environ.get("MYSQL_PASSWORD", "")
         mysql_database = os.environ.get("MYSQL_DATABASE", "doculogic")
         
+        # URL 编码密码（处理特殊字符如 @, #, ! 等）
+        encoded_password = quote_plus(mysql_password) if mysql_password else ""
+        
         # 构建 MySQL URL
-        if mysql_password:
-            url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
+        if encoded_password:
+            url = f"mysql+pymysql://{mysql_user}:{encoded_password}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
         else:
             url = f"mysql+pymysql://{mysql_user}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
         

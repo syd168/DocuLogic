@@ -1,4 +1,4 @@
-，#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 SQLite 到 MySQL 数据迁移工具
 

@@ -31,7 +31,32 @@ echo ""
 # 1. 创建目录结构
 echo "[1/5] 检查并创建目录结构..."
 
-# 检查目录是否存在且有写权限
+# 首先确保数据根目录存在且有正确权限
+if [ ! -d "${DATA_DIR}" ]; then
+    mkdir -p "${DATA_DIR}" || {
+        echo "❌ 无法创建数据根目录: ${DATA_DIR}"
+        echo "   请检查父目录权限或手动创建:"
+        echo "   mkdir -p ${DATA_DIR}"
+        exit 1
+    }
+    echo "✓ 已创建数据根目录: ${DATA_DIR}"
+fi
+
+# 检查数据根目录权限
+if [ ! -w "${DATA_DIR}" ]; then
+    echo "⚠️  警告: 数据根目录 ${DATA_DIR} 无写权限"
+    echo "   尝试修复权限..."
+    sudo chown -R $(whoami):$(id -gn) "${DATA_DIR}" 2>/dev/null || {
+        echo "❌ 无法自动修复权限，请手动执行:"
+        echo "   sudo chown -R $(whoami):$(id -gn) ${DATA_DIR}"
+        echo "   sudo chmod -R 755 ${DATA_DIR}"
+        exit 1
+    }
+    chmod -R 755 "${DATA_DIR}"
+    echo "✓ 权限已修复"
+fi
+
+# 创建子目录
 for dir in "${DATA_DIR}/output" "${DATA_DIR}/logs" "${DATA_DIR}/database" "${MODEL_DIR}"; do
     if [ -d "$dir" ]; then
         # 目录已存在，检查写权限
@@ -54,6 +79,7 @@ for dir in "${DATA_DIR}/output" "${DATA_DIR}/logs" "${DATA_DIR}/database" "${MOD
             echo "❌ 无法创建目录: $dir"
             echo "   请检查父目录权限或手动创建:"
             echo "   mkdir -p $dir"
+            echo "   或执行: sudo chown -R $(whoami):$(id -gn) ${DATA_DIR}"
             exit 1
         }
         echo "✓ 已创建目录: $dir"

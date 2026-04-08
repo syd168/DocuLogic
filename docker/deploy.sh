@@ -1,4 +1,4 @@
-#!/bin/bash
+u#!/bin/bash
 set -e
 
 # DocuLogic Docker 一键部署脚本
@@ -28,63 +28,39 @@ fi
 echo "✓ Docker 运行正常"
 echo ""
 
-# 1. 创建目录结构
-echo "[1/5] 检查并创建目录结构..."
+# 1. 检查并提示目录结构
+echo "[1/5] 检查数据目录..."
 
-# 首先确保数据根目录存在且有正确权限
+# 仅检查根目录是否存在，不存在则创建
 if [ ! -d "${DATA_DIR}" ]; then
+    echo "⚠️  数据根目录不存在: ${DATA_DIR}"
+    echo "   尝试创建..."
     mkdir -p "${DATA_DIR}" || {
-        echo "❌ 无法创建数据根目录: ${DATA_DIR}"
-        echo "   请检查父目录权限或手动创建:"
-        echo "   mkdir -p ${DATA_DIR}"
+        echo "❌ 无法创建目录，请手动执行:"
+        echo "   sudo mkdir -p ${DATA_DIR}"
+        echo "   sudo chown $(whoami):$(id -gn) ${DATA_DIR}"
         exit 1
     }
-    echo "✓ 已创建数据根目录: ${DATA_DIR}"
+    echo "✓ 已创建: ${DATA_DIR}"
+else
+    echo "✓ 数据目录已存在: ${DATA_DIR}"
 fi
 
-# 检查数据根目录权限
-if [ ! -w "${DATA_DIR}" ]; then
-    echo "⚠️  警告: 数据根目录 ${DATA_DIR} 无写权限"
-    echo "   尝试修复权限..."
-    sudo chown -R $(whoami):$(id -gn) "${DATA_DIR}" 2>/dev/null || {
-        echo "❌ 无法自动修复权限，请手动执行:"
-        echo "   sudo chown -R $(whoami):$(id -gn) ${DATA_DIR}"
-        echo "   sudo chmod -R 755 ${DATA_DIR}"
-        exit 1
-    }
-    chmod -R 755 "${DATA_DIR}"
-    echo "✓ 权限已修复"
-fi
-
-# 创建子目录
+# 检查子目录，如果不存在则提示（由 Docker 自动创建）
+MISSING_DIRS=()
 for dir in "${DATA_DIR}/output" "${DATA_DIR}/logs" "${DATA_DIR}/database" "${MODEL_DIR}"; do
-    if [ -d "$dir" ]; then
-        # 目录已存在，检查写权限
-        if [ ! -w "$dir" ]; then
-            echo "⚠️  警告: 目录 $dir 存在但无写权限"
-            echo "   尝试修复权限..."
-            chmod -R 755 "$dir" 2>/dev/null || {
-                echo "❌ 无法修复权限，请手动执行:"
-                echo "   sudo chown -R $(whoami):$(id -gn) ${DATA_DIR}"
-                echo "   sudo chmod -R 755 ${DATA_DIR}"
-                exit 1
-            }
-            echo "✓ 权限已修复"
-        else
-            echo "✓ 目录已存在: $dir"
-        fi
-    else
-        # 目录不存在，创建它
-        mkdir -p "$dir" || {
-            echo "❌ 无法创建目录: $dir"
-            echo "   请检查父目录权限或手动创建:"
-            echo "   mkdir -p $dir"
-            echo "   或执行: sudo chown -R $(whoami):$(id -gn) ${DATA_DIR}"
-            exit 1
-        }
-        echo "✓ 已创建目录: $dir"
+    if [ ! -d "$dir" ]; then
+        MISSING_DIRS+=("$dir")
     fi
 done
+
+if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
+    echo "ℹ️  以下子目录将由 Docker 自动创建:"
+    for dir in "${MISSING_DIRS[@]}"; do
+        echo "   - $dir"
+    done
+    echo "   （Docker 会以 root 权限创建，首次启动后可能需要调整权限）"
+fi
 
 echo "✓ 目录结构检查完成"
 echo ""

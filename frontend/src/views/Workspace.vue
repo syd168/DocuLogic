@@ -1427,17 +1427,37 @@
                     </template>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="120" fixed="right">
+                <el-table-column label="操作" width="200" fixed="right">
                   <template #default="{ row }">
-                    <el-button 
-                      v-if="!row.is_admin || row.username === username"
-                      link 
-                      type="primary" 
-                      @click="openUserEdit(row)"
-                    >
-                      编辑
-                    </el-button>
-                    <span v-else class="muted" style="font-size: 12px;">不可编辑</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <el-button 
+                        v-if="!row.is_admin || row.username === username"
+                        link 
+                        type="primary" 
+                        size="small"
+                        @click="openUserEdit(row)"
+                      >
+                        编辑
+                      </el-button>
+                      <el-button 
+                        link 
+                        type="warning" 
+                        size="small"
+                        @click="viewUserSession(row)"
+                      >
+                        查看会话
+                      </el-button>
+                      <el-button 
+                        v-if="row.id !== currentUserId"
+                        link 
+                        type="danger" 
+                        size="small"
+                        @click="kickUserConfirm(row)"
+                      >
+                        踢出
+                      </el-button>
+                      <span v-else class="muted" style="font-size: 12px;">不可操作</span>
+                    </div>
                   </template>
                 </el-table-column>
               </el-table>
@@ -1589,6 +1609,57 @@
             <el-button type="primary" :loading="usersBatchLoading" @click="submitBatchPdf">提交</el-button>
           </template>
         </el-dialog>
+
+        <!-- 查看用户会话对话框 -->
+        <el-dialog v-model="sessionDialogVisible" title="用户会话信息" width="600px" destroy-on-close>
+          <div v-if="sessionLoading" class="text-center py-4">
+            <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+            <p class="mt-2">加载中...</p>
+          </div>
+          <div v-else-if="!sessionData.has_session" class="text-center py-4">
+            <el-icon :size="48" color="#909399"><CircleClose /></el-icon>
+            <p class="mt-2 muted">该用户当前没有活跃会话</p>
+          </div>
+          <div v-else>
+            <el-descriptions :column="1" border>
+              <el-descriptions-item label="用户名">
+                {{ sessionData.session.username }}
+              </el-descriptions-item>
+              <el-descriptions-item label="登录 IP">
+                {{ sessionData.session.ip_address || '未知' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="浏览器">
+                <span style="font-size: 12px; word-break: break-all;">
+                  {{ sessionData.session.user_agent || '未知' }}
+                </span>
+              </el-descriptions-item>
+              <el-descriptions-item label="登录时间">
+                {{ fmtTime(sessionData.session.login_at) }}
+              </el-descriptions-item>
+              <el-descriptions-item label="最后活跃">
+                {{ fmtTime(sessionData.session.last_active) }}
+              </el-descriptions-item>
+            </el-descriptions>
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              class="mt-3"
+              title="提示：踢出用户后，该用户的 Token 将立即失效，需要重新登录。"
+            />
+          </div>
+          <template #footer>
+            <el-button @click="sessionDialogVisible = false">关闭</el-button>
+            <el-button 
+              v-if="sessionData.has_session && sessionUserId !== currentUserId"
+              type="danger" 
+              :loading="kickingUser"
+              @click="confirmKickUser"
+            >
+              踢出该用户
+            </el-button>
+          </template>
+        </el-dialog>
       </div>
     </div>
   </div>
@@ -1646,6 +1717,8 @@ const PDF_PAGES_DEFAULT = 5
 
 const router = useRouter()
 const username = ref('…')
+/** 当前用户 ID */
+const currentUserId = ref(null)
 /** 用户详细信息 */
 const userProfile = reactive({
   id: null,
@@ -2092,6 +2165,16 @@ const userEditForm = reactive({
   image_output_use_default: true,
 })
 
+// 会话管理相关
+const sessionDialogVisible = ref(false)
+const sessionLoading = ref(false)
+const sessionData = reactive({
+  has_session: false,
+  session: null,
+})
+const sessionUserId = ref(null)
+const kickingUser = ref(false)
+
 // 创建用户相关
 const createUserVisible = ref(false)
 const createUserLoading = ref(false)
@@ -2241,6 +2324,7 @@ onMounted(async () => {
     const { data } = await http.get('/api/auth/me')
     username.value = data?.username || '用户'
     isAdmin.value = !!data?.is_admin
+    currentUserId.value = data?.id || null
     
     // 更新用户详细信息
     Object.assign(userProfile, {
@@ -2852,6 +2936,74 @@ async function submitUserEdit() {
     ElMessage.error(e.response?.data?.detail || e.message)
   } finally {
     userSaveLoading.value = false
+  }
+}
+
+// ==================== 会话管理函数 ====================
+
+/** 查看用户会话 */
+async function viewUserSession(row) {
+  sessionUserId.value = row.id
+  sessionDialogVisible.value = true
+  sessionLoading.value = true
+  sessionData.has_session = false
+  sessionData.session = null
+  
+  try {
+    const { data } = await http.get(`/api/admin/users/${row.id}/session`)
+    sessionData.has_session = data.has_session
+    sessionData.session = data.session || null
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '获取会话信息失败')
+    sessionData.has_session = false
+  } finally {
+    sessionLoading.value = false
+  }
+}
+
+/** 确认踢出用户（从表格直接点击） */
+async function kickUserConfirm(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要踢出用户「${row.username}」吗？\n\n该用户的 Token 将立即失效，需要重新登录。`,
+      '踢出用户',
+      { type: 'warning', confirmButtonText: '确定踢出', cancelButtonText: '取消' }
+    )
+    await doKickUser(row.id, row.username)
+  } catch {
+    // 用户取消
+  }
+}
+
+/** 确认踢出用户（从会话对话框点击） */
+async function confirmKickUser() {
+  if (!sessionData.session) return
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要踢出用户「${sessionData.session.username}」吗？\n\n该用户的 Token 将立即失效，需要重新登录。`,
+      '踢出用户',
+      { type: 'warning', confirmButtonText: '确定踢出', cancelButtonText: '取消' }
+    )
+    await doKickUser(sessionUserId.value, sessionData.session.username)
+    sessionDialogVisible.value = false
+  } catch {
+    // 用户取消
+  }
+}
+
+/** 执行踢出操作 */
+async function doKickUser(userId, username) {
+  kickingUser.value = true
+  try {
+    const { data } = await http.post(`/api/admin/users/${userId}/kick`)
+    ElMessage.success(data.message || `已踢出用户 ${username}`)
+    // 刷新用户列表
+    await loadUsers()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '踢出用户失败')
+  } finally {
+    kickingUser.value = false
   }
 }
 

@@ -4988,6 +4988,7 @@ async function stopJob() {
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
+  margin-left: 10px;
 }
 
 .settings-dl-source :deep(.el-radio-button__inner):hover {

@@ -895,12 +895,9 @@ docker compose up -d --build
 
 ---
 
-<div align="center">
 
 **如果这个项目对你有帮助，请考虑给它一个 ⭐ Star！**
 
 Made with ❤️ by the DocuLogic Team
 
 [📄 Apache 2.0 License](LICENSE) • [🐛 报告问题](https://github.com/your-username/DocuLogic/issues) • [💡 提出建议](https://github.com/your-username/DocuLogic/issues)
-
-</div>

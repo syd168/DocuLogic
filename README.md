@@ -1,49 +1,72 @@
-# Logics-Parsing Web Platform
+# DocuLogic v1.0
 
 <div align="center">
 
-**基于 Logics-Parsing-v2 的智能文档解析 Web 平台**
+**智能文档解析与结构化平台 | Intelligent Document Parsing & Structuring Platform**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
 [![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-orange.svg)](https://github.com/your-username/DocuLogic/releases/tag/v1.0.0)
+
+[📖 简介](#-项目简介) • [🚀 快速开始](#-快速开始) • [📸 功能展示](#-功能展示) • [🏗️ 架构设计](#️-架构设计) • [📝 API 文档](#-api-文档)
 
 </div>
 
 ## 📖 项目简介
 
-Logics-Parsing Web Platform 是一个功能完整的智能文档解析 Web 应用，基于阿里巴巴开源的 **Logics-Parsing-v2** 模型构建。该平台提供直观的图形界面，支持图片、PDF 等多种格式文档的结构化解析，能够将复杂版面文档转换为结构化的 HTML/Markdown 输出。
+DocuLogic（Document Logic）是一个企业级智能文档解析平台，基于阿里巴巴开源的 **Logics-Parsing-v2** 模型构建。该平台提供完整的文档解析、用户管理、任务追踪和系统配置功能，能够将复杂版面文档（PDF、图片等）转换为结构化的 Markdown/HTML 输出。
 
 ### ✨ 核心特性
 
-- **🎯 端到端解析**：单模型架构，无需复杂的多阶段流水线
-- **📄 多格式支持**：支持 PNG、JPG、WebP、BMP、TIFF、PDF 等格式
-- **🔬 STEM 内容识别**：精准识别科学公式、化学结构（SMILES 格式）、手写文本
-- **📊 复杂版面处理**：优秀处理报纸、杂志等多栏复杂布局文档
-- **🎵 Parsing-2.0**：支持流程图（Mermaid）、乐谱（ABC 记谱法）、伪代码块
-- **👥 多用户系统**：完整的用户注册、登录、权限管理
-- **⚙️ 灵活配置**：管理员可配置 PDF 页数限制、输出模式、僵尸任务超时等
-- **📈 任务管理**：实时进度追踪、生成记录查询、缓存清理
-- **🖼️ 多种输出模式**：Base64 嵌入、独立文件、不输出图片
+#### 🎯 强大的文档解析能力
+- **端到端解析**：单模型架构，无需复杂的多阶段流水线
+- **多格式支持**：PNG、JPG、WebP、BMP、TIFF、PDF 等主流格式
+- **STEM 内容识别**：精准识别科学公式、化学结构（SMILES）、手写文本
+- **复杂版面处理**：优秀处理报纸、杂志等多栏复杂布局文档
+- **Parsing-2.0**：支持流程图（Mermaid）、乐谱（ABC 记谱法）、伪代码块
+
+#### 👥 完善的用户系统
+- **用户认证**：注册、登录、找回密码、邮箱/手机验证码
+- **权限管理**：管理员与普通用户分级权限控制
+- **会话管理**：单点登录（SSO）、Token 黑名单、强制登出
+- **安全机制**：密码强度校验、图形验证码、速率限制
+
+#### ⚙️ 灵活的系统配置
+- **动态配置**：管理员可实时调整 PDF 页数限制、输出模式、超时时间等
+- **数据库切换**：支持 SQLite（开发）和 MySQL（生产）无缝切换
+- **缓存策略**：Redis 缓存验证码、速率限制、Token 黑名单
+- **邮件/SMS**：支持 SMTP 邮件服务和自定义短信接口
+
+#### 📊 全面的任务管理
+- **实时进度**：WebSocket 实时推送解析进度
+- **历史记录**：完整的任务查询、结果下载、缓存清理
+- **多种输出**：Base64 嵌入、独立文件、不输出图片三种模式
+- **批量操作**：支持批量上传、批量清理、批量导出
 
 ## 🚀 快速开始
 
 ### 前置要求
 
+**最低配置：**
 - Python 3.10+
-- Node.js 16+（仅本地部署需要）
-- GPU（推荐，用于模型推理）或 CPU
+- Docker & Docker Compose（推荐部署方式）
 - 至少 16GB RAM（建议 32GB+）
-- Docker & Docker Compose（仅 Docker 部署需要）
+- GPU（推荐，用于模型推理）或 CPU
+
+**本地开发额外需要：**
+- Node.js 18+
+- Git
 
 ---
 
 ### 🐳 方式一：Docker 一键部署（⭐ 强烈推荐）
 
-**适合人群**：想快速体验、生产环境部署
+**适合人群**：快速体验、生产环境部署、无需修改代码
 
-#### 快速开始
+#### 5分钟快速启动
 
 ```bash
 # 1. 克隆项目
@@ -58,12 +81,13 @@ cd DocuLogic
 # 默认账号: admin / admin123
 ```
 
-**部署脚本会自动：**
+**部署脚本自动完成：**
 - ✅ 检查系统环境（Docker、GPU）
 - ✅ 创建数据目录（~/doculogic/）
 - ✅ 下载模型权重（如需要）
-- ✅ 生成安全密钥
-- ✅ 构建并启动容器（包含 Redis）
+- ✅ 生成安全密钥（JWT_SECRET、CODE_PEPPER）
+- ✅ 构建并启动容器（主应用 + Redis + MySQL）
+- ✅ 初始化数据库和系统设置
 - ✅ 验证服务健康状态
 
 #### 手动 Docker Compose 部署
@@ -98,21 +122,29 @@ docker compose logs -f
 #### Docker 部署架构
 
 ```
-┌─────────────────────────────────────┐
-│       Docker Compose 服务            │
-├─────────────────────────────────────┤
-│                                     │
-│  ┌──────────────┐  ┌─────────────┐ │
-│  │  doculogic   │──│   Redis     │ │
-│  │              │  │             │ │
-│  │ • FastAPI    │  │ • 缓存服务   │ │
-│  │ • Nginx      │  │ • 512MB内存  │ │
-│  │ • GPU支持    │  │ • AOF持久化  │ │
-│  └──────┬───────┘  └─────────────┘ │
-│         │                           │
-│         ▼                           │
-│  端口: 8030                         │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│         Docker Compose 服务栈                 │
+├──────────────────────────────────────────────┤
+│                                              │
+│  ┌──────────────┐  ┌──────────┐             │
+│  │  doculogic   │──│  Redis   │             │
+│  │              │  │          │             │
+│  │ • FastAPI    │  │• 缓存    │             │
+│  │ • Nginx      │  │• 速率限制│             │
+│  │ • GPU支持    │  │• Token黑名单│           │
+│  └──────┬───────┘  └──────────┘             │
+│         │                                    │
+│         ▼                                    │
+│  ┌──────────────┐                           │
+│  │   MySQL      │                           │
+│  │              │                           │
+│  │• 用户数据    │                           │
+│  │• 任务记录    │                           │
+│  │• 系统配置    │                           │
+│  └──────────────┘                           │
+│                                              │
+│  端口: 8030                                  │
+└──────────────────────────────────────────────┘
          │
          ▼
   http://localhost:8030
@@ -121,6 +153,7 @@ docker compose logs -f
 **服务组成：**
 - **doculogic**: 主应用容器（FastAPI + Nginx + 模型推理）
 - **redis**: Redis 缓存容器（验证码、速率限制、Token黑名单）
+- **mysql**: MySQL 数据库容器（用户、任务、配置数据）
 
 **数据持久化：**
 ```
@@ -128,8 +161,8 @@ docker compose logs -f
 ├── data/
 │   ├── output/      # 解析输出结果
 │   ├── logs/        # 应用日志
-│   ├── database/    # SQLite 数据库
-│   └── redis/       # Redis 数据（AOF持久化）
+│   └── mysql/       # MySQL 数据文件
+├── redis/           # Redis AOF 持久化数据
 └── models/          # 模型权重
 ```
 
@@ -164,6 +197,9 @@ docker logs -f doculogic
 # 仅查看 Redis
 docker logs -f doculogic-redis
 
+# 仅查看 MySQL
+docker logs -f doculogic-mysql
+
 # 查看最近 100 行
 docker logs --tail 100 doculogic
 
@@ -174,13 +210,19 @@ docker exec -it doculogic bash
 # 进入 Redis CLI
 docker exec -it doculogic-redis redis-cli
 
+# 进入 MySQL CLI
+docker exec -it doculogic-mysql mysql -uroot -p
+
 # ========== 资源监控 ==========
 # 查看资源占用
-docker stats doculogic doculogic-redis
+docker stats doculogic doculogic-redis doculogic-mysql
 
 # ========== 数据管理 ==========
-# 备份数据库
-docker cp doculogic:/app/web/data/app.db ./backup_$(date +%Y%m%d).db
+# 备份 MySQL 数据库
+docker exec doculogic-mysql mysqldump -uroot -p${MYSQL_PASSWORD} doculogic > backup_$(date +%Y%m%d).sql
+
+# 恢复 MySQL 数据库
+docker exec -i doculogic-mysql mysql -uroot -p${MYSQL_PASSWORD} doculogic < backup_20240101.sql
 
 # 清理旧任务（保留最近7天）
 docker exec doculogic python -c "
@@ -195,7 +237,7 @@ print('清理完成')
 "
 
 # ========== 更新版本 ==========
-git pull
+git pull origin main
 cd docker
 docker compose down
 docker compose up -d --build
@@ -203,17 +245,37 @@ docker compose up -d --build
 
 #### 环境变量配置
 
+**核心配置项：**
+
 | 变量 | 说明 | 默认值 | 示例 |
 |------|------|--------|------|
 | `HOST_PORT` | 访问端口 | `8030` | `8080` |
 | `DATA_DIR` | 数据目录 | `~/doculogic/data` | `/mnt/data/doculogic` |
 | `MODEL_DIR` | 模型目录 | `~/doculogic/models` | `/ssd/models` |
 | `GPU_COUNT` | GPU数量（0=禁用） | `1` | `0` |
-| `JWT_SECRET` | JWT密钥 | `change-me` | `$(openssl rand -hex 32)` |
+| `JWT_SECRET` | JWT密钥 | `自动生成` | `$(openssl rand -hex 32)` |
+| `CODE_PEPPER` | 验证码加盐 | `自动生成` | 随机字符串 |
 | `MEM_LIMIT` | 内存限制 | `8g` | `16g` |
 | `CPU_LIMIT` | CPU限制 | `4.0` | `8.0` |
+
+**数据库配置：**
+
+| 变量 | 说明 | 默认值 | 示例 |
+|------|------|--------|------|
+| `DATABASE_TYPE` | 数据库类型 | `mysql` | `sqlite` / `mysql` |
+| `MYSQL_HOST` | MySQL主机 | `mysql` | `localhost` |
+| `MYSQL_PORT` | MySQL端口 | `3306` | `3306` |
+| `MYSQL_USER` | MySQL用户名 | `doculogic` | `root` |
+| `MYSQL_PASSWORD` | MySQL密码 | `自动生成` | `your_password` |
+| `MYSQL_DATABASE` | 数据库名 | `doculogic` | `doculogic` |
+
+**Redis 配置：**
+
+| 变量 | 说明 | 默认值 | 示例 |
+|------|------|--------|------|
 | `REDIS_HOST` | Redis主机 | `redis` | `localhost` |
 | `REDIS_PORT` | Redis端口 | `6379` | `6379` |
+| `REDIS_DB` | Redis数据库 | `0` | `0-15` |
 
 **使用示例：**
 
@@ -231,8 +293,9 @@ echo "MEM_LIMIT=16g" >> .env
 echo "CPU_LIMIT=8.0" >> .env
 docker compose up -d
 
-# 禁用Redis（降级到数据库）
-echo "REDIS_HOST=invalid-host" >> .env
+# 切换到 SQLite（开发环境）
+echo "DATABASE_TYPE=sqlite" >> .env
+docker compose down
 docker compose up -d
 ```
 
@@ -394,42 +457,237 @@ npm run dev
 - 缓存管理
 - 模型下载与重载
 
-## 🏗️ 项目结构
+## 🏗️ 架构设计
+
+### 系统架构图
 
 ```
-Logics-Parsing-Web/
-├── docker/                 # Docker 部署文件 ⭐
-│   ├── Dockerfile.all-in-one      # 单容器全栈镜像
-│   ├── nginx-single-container.conf # Nginx 配置
-│   ├── docker-compose.simple.yml   # 一键部署配置
-│   ├── deploy.sh                  # 一键部署脚本
-│   └── README.md                  # Docker 部署说明
-├── frontend/               # Vue 3 前端
+┌───────────────────────────────────────────────────────────────┐
+│                        客户端层                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
+│  │   Web UI    │  │  Mobile App │  │   API SDK   │           │
+│  │  (Vue 3)    │  │  (Future)   │  │  (Future)   │           │
+│  └──────┬──────┘  └─────────────┘  └─────────────┘           │
+└─────────┼─────────────────────────────────────────────────────┘
+          │ HTTP/WebSocket
+┌─────────▼─────────────────────────────────────────────────────┐
+│                       网关层                                    │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │                    Nginx                               │   │
+│  │  • 静态文件服务  • 反向代理  • 负载均衡  • SSL终止      │   │
+│  └───────────────────────┬───────────────────────────────┘   │
+└──────────────────────────┼───────────────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────────────┐
+│                      应用层                                   │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │                  FastAPI Backend                       │   │
+│  │                                                       │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐             │   │
+│  │  │ Auth     │ │ Parse    │ │ Admin    │             │   │
+│  │  │ Router   │ │ Router   │ │ Router   │             │   │
+│  │  └──────────┘ └──────────┘ └──────────┘             │   │
+│  │                                                       │   │
+│  │  ┌──────────────────────────────────────────┐       │   │
+│  │  │         Business Logic Layer             │       │   │
+│  │  │  • 用户管理  • 会话管理  • 任务调度       │       │   │
+│  │  │  • 模型推理  • 邮件/SMS  • 速率限制       │       │   │
+│  │  └──────────────────────────────────────────┘       │   │
+│  └───────────────────────┬───────────────────────────┘   │
+└──────────────────────────┼───────────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────────────┐
+│                      数据层                                   │
+│  ┌──────────────┐  ┌──────────┐  ┌──────────────┐         │
+│  │   MySQL      │  │  Redis   │  │ File System  │         │
+│  │              │  │          │  │              │         │
+│  │• 用户数据    │  │• 验证码  │  │• 解析结果    │         │
+│  │• 任务记录    │  │• 速率限制│  │• 模型权重    │         │
+│  │• 系统配置    │  │• SSO会话 │  │• 上传文件    │         │
+│  └──────────────┘  └──────────┘  └──────────────┘         │
+└───────────────────────────────────────────────────────────────┘
+```
+
+### 技术栈
+
+**后端：**
+- **框架**：FastAPI 0.100+（异步、高性能）
+- **ORM**：SQLAlchemy 2.0（支持 SQLite/MySQL）
+- **认证**：JWT (python-jose) + bcrypt 密码哈希
+- **缓存**：Redis 7.x（可选，降级到数据库）
+- **WebSocket**：实时进度推送
+- **邮件**：SMTP / Mock 模式
+- **短信**：HTTP API / Mock 模式
+
+**前端：**
+- **框架**：Vue 3 + Composition API
+- **UI库**：Element Plus
+- **路由**：Vue Router 4
+- **状态管理**：Pinia
+- **HTTP客户端**：Axios
+- **构建工具**：Vite 5
+
+**基础设施：**
+- **容器化**：Docker + Docker Compose
+- **Web服务器**：Nginx（静态文件 + 反向代理）
+- **数据库**：MySQL 8.0 / SQLite 3
+- **缓存**：Redis 7
+- **GPU加速**：NVIDIA CUDA + PyTorch
+
+**AI 模型：**
+- **核心模型**：Logics-Parsing-v2（阿里巴巴开源）
+- **深度学习框架**：PyTorch 2.0+
+- **Transformer**：HuggingFace Transformers
+
+## 📝 API 文档
+
+启动服务后，访问以下地址查看完整的 API 文档：
+
+- **Swagger UI**: http://localhost:8030/api/docs
+- **ReDoc**: http://localhost:8030/api/redoc
+
+### 主要 API 端点
+
+#### 认证相关
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | `/api/auth/register` | 用户注册 | ❌ |
+| POST | `/api/auth/login` | 用户登录 | ❌ |
+| POST | `/api/auth/logout` | 用户登出 | ✅ |
+| POST | `/api/auth/forgot-password` | 找回密码 | ❌ |
+| POST | `/api/auth/reset-password` | 重置密码 | ❌ |
+| GET | `/api/auth/me` | 获取当前用户信息 | ✅ |
+
+#### 文档解析
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | `/api/jobs/upload` | 上传并创建解析任务 | ✅ |
+| GET | `/api/jobs` | 查询任务列表 | ✅ |
+| GET | `/api/jobs/{job_id}` | 查询任务详情 | ✅ |
+| DELETE | `/api/jobs/{job_id}` | 删除任务 | ✅ |
+| GET | `/api/jobs/{job_id}/result` | 下载解析结果 | ✅ |
+| WS | `/ws/jobs/{job_id}` | WebSocket 实时进度 | ✅ |
+
+#### 系统管理（管理员）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/api/admin/settings` | 获取系统设置 | ✅ Admin |
+| PUT | `/api/admin/settings` | 更新系统设置 | ✅ Admin |
+| GET | `/api/admin/users` | 查询用户列表 | ✅ Admin |
+| POST | `/api/admin/users` | 创建用户 | ✅ Admin |
+| PUT | `/api/admin/users/{id}` | 更新用户 | ✅ Admin |
+| DELETE | `/api/admin/users/{id}` | 删除用户 | ✅ Admin |
+| POST | `/api/admin/users/{id}/kick` | 踢出用户 | ✅ Admin |
+| GET | `/api/admin/jobs` | 查询所有任务 | ✅ Admin |
+| DELETE | `/api/admin/jobs/cleanup` | 清理旧任务 | ✅ Admin |
+
+### API 使用示例
+
+```bash
+# 1. 登录获取 Token
+curl -X POST http://localhost:8030/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+
+# 响应:
+# {"access_token": "eyJhbGci...", "token_type": "bearer"}
+
+# 2. 上传文档进行解析
+curl -X POST http://localhost:8030/api/jobs/upload \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -F "file=@document.pdf" \
+  -F "max_pages=50"
+
+# 响应:
+# {"job_id": "abc123", "status": "processing", "total_pages": 10}
+
+# 3. 查询任务状态
+curl http://localhost:8030/api/jobs/abc123 \
+  -H "Authorization: Bearer eyJhbGci..."
+
+# 响应:
+# {"job_id": "abc123", "status": "completed", "progress": 100}
+
+# 4. 下载解析结果
+curl http://localhost:8030/api/jobs/abc123/result \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -o result.zip
+```
+
+## 📂 项目结构
+
+```
+DocuLogic/
+├── docker/                     # Docker 部署文件 ⭐
+│   ├── Dockerfile              # 多阶段构建镜像
+│   ├── docker-compose.yml      # 服务编排配置
+│   ├── deploy.sh               # 一键部署脚本
+│   ├── nginx/
+│   │   └── default.conf        # Nginx 配置
+│   └── README.md               # Docker 详细说明
+│
+├── frontend/                   # Vue 3 前端
 │   ├── src/
-│   │   ├── views/           # 页面组件
-│   │   ├── components/      # 通用组件
-│   │   ├── api/            # API 调用
-│   │   └── router/         # 路由配置
-│   └── package.json
-├── web/                     # FastAPI 后端
+│   │   ├── api/                # API 调用封装
+│   │   ├── components/         # 通用组件
+│   │   ├── router/             # 路由配置
+│   │   ├── styles/             # 全局样式
+│   │   ├── views/              # 页面组件
+│   │   │   ├── Landing.vue     # 首页
+│   │   │   ├── Login.vue       # 登录页
+│   │   │   ├── Register.vue    # 注册页
+│   │   │   ├── Forgot.vue      # 找回密码
+│   │   │   └── Workspace.vue   # 工作台
+│   │   ├── App.vue             # 根组件
+│   │   └── main.js             # 入口文件
+│   ├── package.json            # 前端依赖
+│   └── vite.config.js          # Vite 配置
+│
+├── web/                        # FastAPI 后端
 │   ├── app/
-│   │   ├── routers/        # API 路由
-│   │   ├── models.py       # 数据库模型
-│   │   ├── main.py         # 主应用
+│   │   ├── routers/            # API 路由
+│   │   │   ├── auth.py         # 认证相关
+│   │   │   ├── jobs.py         # 任务管理
+│   │   │   └── admin.py        # 管理后台
+│   │   ├── auth_security.py    # 密码哈希、JWT
+│   │   ├── cache.py            # Redis 缓存封装
+│   │   ├── captcha.py          # 图形验证码
+│   │   ├── database.py         # 数据库连接与迁移
+│   │   ├── deps.py             # 依赖注入
+│   │   ├── email_svc.py        # 邮件服务
+│   │   ├── job_events.py       # WebSocket 事件
+│   │   ├── models.py           # SQLAlchemy 模型
+│   │   ├── session_manager.py  # 会话管理 (SSO)
+│   │   ├── settings_service.py # 系统设置服务
+│   │   ├── sms_svc.py          # 短信服务
 │   │   └── model_inference.py  # 模型推理
-│   └── data/               # SQLite 数据库
-├── logics-parsingv2/        # Logics-Parsing-v2 模型
-│   ├── weights/            # 模型权重
-│   └── inference_v2.py     # 推理脚本
-├── out/                     # 解析输出目录
-├── docker-compose.yml       # 多容器开发配置
-├── requirements.txt         # Python 依赖
-└── README.md               # 本文件
+│   ├── data/                   # SQLite 数据库（开发用）
+│   └── static/                 # 静态文件
+│
+├── logics-parsingv2/           # Logics-Parsing-v2 模型
+│   ├── weights/                # 模型权重目录
+│   ├── inference_v2.py         # 推理脚本
+│   └── download_model_v2.py    # 模型下载脚本
+│
+├── out/                        # 解析输出目录（自动创建）
+├── logs/                       # 应用日志（自动创建）
+│
+├── .env                        # 环境变量配置（不提交到 Git）
+├── .env.example                # 环境变量示例
+├── requirements.txt            # Python 依赖
+├── start.sh                    # 本地启动脚本
+├── stop.sh                     # 本地停止脚本
+└── README.md                   # 本文件
 ```
 
 ## 🔧 配置说明
 
 ### 系统设置（管理员）
+
+登录管理后台后，可以在“系统设置”页面调整以下配置：
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
@@ -439,8 +697,12 @@ Logics-Parsing-Web/
 | 僵尸任务超时 | 超时判定时间（分钟） | 10 |
 | 注册开关 | 是否允许新用户注册 | true |
 | 验证码开关 | 登录/注册/找回密码验证码 | false |
+| 密码最小长度 | 用户密码最小长度 | 8 |
+| 密码复杂度要求 | 大小写、数字、特殊字符 | 可选 |
 
 ### 环境变量
+
+详见 `.env.example` 文件。关键配置项：
 
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
@@ -449,6 +711,7 @@ Logics-Parsing-Web/
 | ADMIN_USERNAMES | 管理员用户名 | `admin,superuser` |
 | SMTP_HOST | SMTP 服务器 | `smtp.qq.com` |
 | CORS_ORIGINS | 允许的跨域源 | `http://localhost:5173` |
+| DATABASE_TYPE | 数据库类型 | `mysql` / `sqlite` |
 
 ## 📊 性能指标
 
@@ -461,6 +724,69 @@ Logics-Parsing-v2 模型在多个基准测试中取得 SOTA 成绩：
 
 详细 benchmark 数据请参考 [logics-parsingv2/README.md](logics-parsingv2/README.md)
 
+## 🚀 v1.0.0 版本特性
+
+### ✨ 新增功能
+
+1. **完整的用户认证系统**
+   - 邮箱/手机号注册与登录
+   - 图形验证码防暴力破解
+   - 找回密码功能
+   - 密码强度校验
+
+2. **单点登录 (SSO)**
+   - Token 黑名单机制
+   - 多终端互斥登录
+   - 管理员强制踢出用户
+   - 会话管理与追踪
+
+3. **MySQL 数据库支持**
+   - 无缝切换 SQLite/MySQL
+   - Docker 自动初始化 MySQL
+   - 数据库迁移脚本
+   - 数据持久化与备份
+
+4. **Redis 缓存集成**
+   - 验证码存储
+   - 速率限制
+   - Token 黑名单
+   - 会话管理
+
+5. **完善的部署方案**
+   - Docker 一键部署脚本
+   - 多阶段构建优化镜像体积
+   - Nginx 反向代理
+   - GPU 加速支持
+
+6. **管理后台功能**
+   - 系统设置动态配置
+   - 用户管理（CRUD + 批量操作）
+   - 任务查询与清理
+   - 模型下载与重载
+
+### 🐛 Bug 修复
+
+- 修复环境变量解析时行尾注释导致的问题
+- 修复 Token 解码失败时的错误处理
+- 修复系统设置初始化值为 0 的问题
+- 修复 Docker 容器中 MySQL 用户权限问题
+- 修复 PDF.js Worker 加载失败的问题
+
+### 🔧 优化改进
+
+- 优化数据库迁移逻辑，支持增量更新
+- 优化日志输出，区分不同级别的信息
+- 优化错误提示，提供更友好的用户反馈
+- 优化 Docker 镜像构建速度
+- 优化前端加载性能
+
+### 📝 文档完善
+
+- 重写 README.md，增加架构图和 API 文档
+- 添加详细的 Docker 部署说明
+- 添加常见问题解答 (FAQ)
+- 添加 API 使用示例
+
 ## 🔐 安全说明
 
 - 默认情况下，邮件和短信服务处于模拟模式
@@ -468,6 +794,8 @@ Logics-Parsing-v2 模型在多个基准测试中取得 SOTA 成绩：
 - 建议启用图形验证码防止暴力破解
 - 定期更新管理员密码
 - 不要将 `.env` 文件提交到版本控制系统
+- JWT_SECRET 和 CODE_PEPPER 应使用强随机字符串
+- 建议启用 HTTPS（通过 Nginx 配置 SSL 证书）
 
 ## 🤝 贡献指南
 
@@ -498,10 +826,72 @@ Logics-Parsing-v2 模型在多个基准测试中取得 SOTA 成绩：
 
 ## ⚠️ 注意事项
 
+### 硬件要求
+
 1. **显存需求**：模型推理需要较大显存，建议至少 16GB GPU 显存
-2. **首次加载**：首次加载模型可能需要几分钟，请耐心等待
-3. **PDF 处理**：大页数 PDF 会消耗较多时间和内存，建议设置合理的页数上限
-4. **磁盘空间**：解析输出会占用磁盘空间，定期清理缓存
+   - CPU 模式也可以运行，但速度较慢（约慢 5-10 倍）
+   - 建议使用 NVIDIA GPU + CUDA 12.0+
+
+2. **内存需求**：至少 16GB RAM，建议 32GB+
+   - 大页数 PDF 会消耗较多内存
+   - 并发处理多个任务时需要更多内存
+
+3. **磁盘空间**：
+   - 模型权重：约 10GB
+   - 解析输出：根据文档大小而定，建议预留 50GB+
+   - Docker 镜像：约 8GB
+
+### 性能优化
+
+1. **首次加载**：首次加载模型可能需要几分钟，请耐心等待
+   - 后续请求会快很多
+   - 可以通过日志查看模型加载进度
+
+2. **PDF 处理**：
+   - 大页数 PDF 会消耗较多时间和内存
+   - 建议设置合理的页数上限（默认 80 页）
+   - 可以分批处理大型文档
+
+3. **磁盘清理**：
+   - 定期清理 `out/` 目录中的旧文件
+   - 使用管理后台的“清理旧任务”功能
+   - 建议保留最近 7 天的数据
+
+### 常见问题
+
+**Q: 部署后无法访问？**
+A: 检查防火墙是否开放 8030 端口，查看容器日志 `docker logs doculogic`
+
+**Q: 模型加载失败？**
+A: 确认模型路径正确，检查 `MODEL_PATH` 环境变量，查看日志确认是否有 GPU 错误
+
+**Q: MySQL 连接失败？**
+A: 检查 `.env` 中的数据库配置，确认 MySQL 容器已启动 `docker ps | grep mysql`
+
+**Q: Redis 连接失败？**
+A: 应用会自动降级到数据库存储，不影响核心功能。如需修复，检查 Redis 容器状态
+
+**Q: 如何备份数据？**
+A: 
+```bash
+# 备份 MySQL
+docker exec doculogic-mysql mysqldump -uroot -p${MYSQL_PASSWORD} doculogic > backup.sql
+
+# 备份 Redis
+docker exec doculogic-redis redis-cli BGSAVE
+
+# 备份解析结果
+tar -czf output_backup.tar.gz ~/doculogic/data/output/
+```
+
+**Q: 如何更新到最新版本？**
+A:
+```bash
+git pull origin main
+cd docker
+docker compose down
+docker compose up -d --build
+```
 
 ---
 
@@ -509,6 +899,8 @@ Logics-Parsing-v2 模型在多个基准测试中取得 SOTA 成绩：
 
 **如果这个项目对你有帮助，请考虑给它一个 ⭐ Star！**
 
-Made with ❤️ by the Logics-Parsing Team
+Made with ❤️ by the DocuLogic Team
+
+[📄 Apache 2.0 License](LICENSE) • [🐛 报告问题](https://github.com/your-username/DocuLogic/issues) • [💡 提出建议](https://github.com/your-username/DocuLogic/issues)
 
 </div>

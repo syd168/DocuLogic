@@ -1448,7 +1448,7 @@
                         查看会话
                       </el-button>
                       <el-button 
-                        v-if="row.id !== currentUserId"
+                        v-if="row.id !== currentUserId && row.has_session"
                         link 
                         type="danger" 
                         size="small"
@@ -1456,7 +1456,8 @@
                       >
                         踢出
                       </el-button>
-                      <span v-else class="muted" style="font-size: 12px;">不可操作</span>
+                      <span v-else-if="row.id === currentUserId" class="muted" style="font-size: 12px;">不可操作</span>
+                      <span v-else class="muted" style="font-size: 12px;">未登录</span>
                     </div>
                   </template>
                 </el-table-column>
@@ -2863,17 +2864,33 @@ async function loadUsers() {
   if (!isAdmin.value) return
   usersLoading.value = true
   try {
-    const { data } = await http.get('/api/admin/users', {
-      params: {
-        page: userPage.value,
-        page_size: userPageSize.value,
-        q: userSearchQ.value.trim() || undefined,
-      },
-    })
-    usersList.value = data.users || []
-    userTotal.value = data.total ?? 0
-    if (data.pdf_max_pages_global != null && data.pdf_max_pages_global !== '') {
-      usersPdfGlobalCap.value = Math.max(1, Number(data.pdf_max_pages_global))
+    // 并行加载用户列表和在线用户
+    const [usersRes, onlineRes] = await Promise.all([
+      http.get('/api/admin/users', {
+        params: {
+          page: userPage.value,
+          page_size: userPageSize.value,
+          q: userSearchQ.value.trim() || undefined,
+        },
+      }),
+      http.get('/api/admin/sessions/online-users').catch(() => ({ data: { users: [] } }))
+    ])
+    
+    const usersListRaw = usersRes.data.users || []
+    const onlineUsers = onlineRes.data.users || []
+    
+    // 创建在线用户 ID 集合
+    const onlineUserIds = new Set(onlineUsers.map(u => u.user_id))
+    
+    // 标记每个用户是否有会话
+    usersList.value = usersListRaw.map(user => ({
+      ...user,
+      has_session: onlineUserIds.has(user.id)
+    }))
+    
+    userTotal.value = usersRes.data.total ?? 0
+    if (usersRes.data.pdf_max_pages_global != null && usersRes.data.pdf_max_pages_global !== '') {
+      usersPdfGlobalCap.value = Math.max(1, Number(usersRes.data.pdf_max_pages_global))
     }
   } catch {
     usersList.value = []

@@ -2,7 +2,7 @@
 数据库配置和迁移管理
 
 本模块负责：
-- 数据库连接配置（支持 SQLite 和 MySQL）
+- 数据库连接配置（支持 SQLite、MySQL、MariaDB、PostgreSQL）
 - 会话管理
 - 数据库表结构初始化
 - 增量数据迁移（向后兼容）
@@ -24,9 +24,11 @@ def _build_database_url() -> str:
     """
     根据环境变量构建数据库 URL
     
-    支持两种模式：
+    支持四种模式：
     1. SQLite（默认）：适合本地开发
-    2. MySQL：适合生产环境，支持 Docker 部署
+    2. MySQL：适合生产环境
+    3. MariaDB：MySQL 的兼容替代品
+    4. PostgreSQL：企业级关系型数据库
     
     Returns:
         str: 数据库连接 URL
@@ -52,6 +54,43 @@ def _build_database_url() -> str:
         
         print(f"📊 使用 MySQL 数据库: {mysql_host}:{mysql_port}/{mysql_database}")
         return url
+    
+    elif db_type == "mariadb":
+        # MariaDB 配置（与 MySQL 完全兼容，复用相同配置变量）
+        maria_host = os.environ.get("MYSQL_HOST", "localhost")
+        maria_port = os.environ.get("MYSQL_PORT", "3306")
+        maria_user = os.environ.get("MYSQL_USER", "root")
+        maria_password = os.environ.get("MYSQL_PASSWORD", "")
+        maria_database = os.environ.get("MYSQL_DATABASE", "doculogic")
+        
+        encoded_password = quote_plus(maria_password) if maria_password else ""
+        
+        if encoded_password:
+            url = f"mysql+pymysql://{maria_user}:{encoded_password}@{maria_host}:{maria_port}/{maria_database}?charset=utf8mb4"
+        else:
+            url = f"mysql+pymysql://{maria_user}@{maria_host}:{maria_port}/{maria_database}?charset=utf8mb4"
+        
+        print(f"📊 使用 MariaDB 数据库: {maria_host}:{maria_port}/{maria_database}")
+        return url
+    
+    elif db_type == "postgresql":
+        # PostgreSQL 配置
+        pg_host = os.environ.get("PG_HOST", "localhost")
+        pg_port = os.environ.get("PG_PORT", "5432")
+        pg_user = os.environ.get("PG_USER", "postgres")
+        pg_password = os.environ.get("PG_PASSWORD", "")
+        pg_database = os.environ.get("PG_DATABASE", "doculogic")
+        
+        encoded_password = quote_plus(pg_password) if pg_password else ""
+        
+        if encoded_password:
+            url = f"postgresql+psycopg2://{pg_user}:{encoded_password}@{pg_host}:{pg_port}/{pg_database}"
+        else:
+            url = f"postgresql+psycopg2://{pg_user}@{pg_host}:{pg_port}/{pg_database}"
+        
+        print(f"📊 使用 PostgreSQL 数据库: {pg_host}:{pg_port}/{pg_database}")
+        return url
+    
     else:
         # SQLite 配置（默认）
         db_url = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE.resolve()}")
@@ -70,11 +109,23 @@ if DATABASE_URL.startswith("sqlite"):
         echo=False,  # 不打印 SQL 日志
     )
 elif DATABASE_URL.startswith("mysql"):
+    # MySQL / MariaDB 配置
     engine = create_engine(
         DATABASE_URL,
         pool_size=10,  # 连接池大小
         max_overflow=20,  # 最大溢出连接数
         pool_recycle=3600,  # 连接回收时间（秒）
+        pool_pre_ping=True,  # 连接前检查有效性
+        echo=False,
+    )
+elif DATABASE_URL.startswith("postgresql"):
+    # PostgreSQL 配置
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=3600,
+        pool_pre_ping=True,
         echo=False,
     )
 else:

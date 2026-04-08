@@ -369,7 +369,7 @@ async def register(request: Request, body: RegisterBody, db: Session = Depends(g
     # 检查单点登录（如果用户已在其他终端登录，旧 token 将被拉黑）
     old_session = check_single_login(user.id, token)
     if old_session:
-        logger.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
+        _log.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
     
     # 创建新的用户会话
     create_user_session(
@@ -447,7 +447,7 @@ async def login(request: Request, body: LoginBody, db: Session = Depends(get_db)
     # 检查单点登录（如果用户已在其他终端登录，旧 token 将被拉黑）
     old_session = check_single_login(user.id, token)
     if old_session:
-        logger.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
+        _log.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
     
     # 创建新的用户会话
     create_user_session(
@@ -488,7 +488,7 @@ async def logout(request: Request, db: Session = Depends(get_db)):
                 revoke_token(token, reason="manual_logout")
                 # 销毁用户会话
                 destroy_user_session(user_id, reason="logout")
-                logger.info(f"用户 {user_id} 已登出")
+                _log.info(f"用户 {user_id} 已登出")
             except (TypeError, ValueError):
                 pass
     

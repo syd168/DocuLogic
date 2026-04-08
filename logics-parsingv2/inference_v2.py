@@ -7,7 +7,19 @@ import re
 import math 
 import cv2 
 import argparse
-import time 
+import time
+
+
+def _collapse_newlines_outside_code_fences(text: str) -> str:
+    """把连续 3+ 换行压成 2 个，不改动 ``` 围栏内内容。"""
+    parts = re.split(r"(```[\s\S]*?```)", text)
+    out = []
+    for part in parts:
+        if part.startswith("```"):
+            out.append(part)
+        else:
+            out.append(re.sub(r"\n{3,}", "\n\n", part))
+    return "".join(out)
 
 
 def inference(img_url, prompt="QwenVL HTML"):
@@ -71,7 +83,7 @@ def process_code_content(content: str) -> str:
     content = re.sub(r'</code>\s*$', '', content, flags=re.IGNORECASE)
     
     # 包裹在 ``` 中
-    return f"```code\n{content.strip()}\n```"
+    return f"``code\n{content.strip()}\n```"
 
 
 def process_pseudocode_content(content: str) -> str:
@@ -175,25 +187,48 @@ def qwenvl_cast_html_tag(input_text: str) -> str:
                 
             return f"\n\n{content}\n\n"
 
+        if class_name in ("chart", "music"):
+            cls_attr = rf'class="[^"]*\b{re.escape(class_name)}\b[^"]*"'
+        else:
+            cls_attr = rf'class="{re.escape(class_name)}"'
         pattern = re.compile(
-            rf'\s*<div\b[^>]*class="{class_name}"[^>]*>(.*?)</div>\s*',
+            rf'\s*<div\b[^>]*{cls_attr}[^>]*>(.*?)</div>\s*',
             flags=re.DOTALL | re.IGNORECASE,
         )
         return pattern.sub(replace_func, txt)
 
-    other_classes = ['image', 'chemistry', 'table', 'formula', 'image caption', 'table caption']
-    # other_classes = ['image', 'chemistry', 'table', 'formula', 'image caption', 'table caption', 'music', 'chart']
+    other_classes = [
+        "chart",
+        "music",
+        "image",
+        "chemistry",
+        "table",
+        "formula",
+        "image caption",
+        "table caption",
+    ]
     for cls in other_classes:
         output = strip_div(cls, output)
-    
-    # <p>
+
+    output = re.sub(
+        r'<div\b[^>]*>\s*(\n*\s*```mermaid\s*[\s\S]*?```)\s*</div>',
+        r"\1",
+        output,
+        flags=re.IGNORECASE,
+    )
+
+    def _replace_p(m):
+        inner = m.group(1).strip()
+        return "" if not inner else "\n" + inner + "\n"
+
     output = re.sub(
         r'<p\b[^>]*>(.*?)</p>',
-        r'\n\n\1\n\n',
+        _replace_p,
         output,
         flags=re.DOTALL | re.IGNORECASE,
     )
-    
+    output = _collapse_newlines_outside_code_fences(output)
+
     output = output.replace(" </td>", "</td>")
     return output
 
@@ -285,7 +320,7 @@ if __name__ == "__main__":
     model = Qwen3VLForConditionalGeneration.from_pretrained(
         model_path,
         dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        attn_implementation="sdpa",
         device_map="cuda:0",
     )
     

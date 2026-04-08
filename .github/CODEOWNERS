@@ -1,0 +1,30 @@
+# Code Owners
+# 这个文件定义了代码所有者，当 PR 修改了某些文件时会自动请求审查
+
+# 默认所有者（所有文件变更都会通知）
+* @your-username
+
+# 后端代码
+web/ @your-username
+web/app/ @your-username
+requirements.txt @your-username
+
+# 前端代码
+frontend/ @your-username
+frontend/src/ @your-username
+
+# 模型相关
+logics-parsingv2/ @your-username
+
+# 配置文件
+.env.example @your-username
+docker-compose.yml @your-username
+Dockerfile @your-username
+
+# GitHub 配置
+.github/ @your-username
+
+# 文档
+README.md @your-username
+CONTRIBUTING.md @your-username
+docs/ @your-username

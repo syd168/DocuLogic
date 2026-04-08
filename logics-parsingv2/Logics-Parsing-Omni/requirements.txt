@@ -2,7 +2,7 @@ accelerate
 decord
 ffmpeg
 ffmpeg-python
-flash-attn
+#flash-attn
 librosa
 moviepy
 opencv-python

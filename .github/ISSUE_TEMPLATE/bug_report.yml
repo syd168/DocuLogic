@@ -1,0 +1,101 @@
+name: Bug Report
+description: 报告一个 bug 帮助我们改进
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你花时间填写这个 bug 报告！在提交之前，请先搜索是否已有类似的 issue。
+        
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug 描述
+      description: 清晰简洁地描述 bug 是什么
+      placeholder: 当我点击...时，发生了...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 如何复现这个 bug
+      placeholder: |
+        1. 前往 '...'
+        2. 点击 '....'
+        3. 滚动到 '....'
+        4. 看到错误
+    validations:
+      required: true
+      
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 你期望发生什么
+      placeholder: 我期望...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么
+      placeholder: 实际上...
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: browsers
+    attributes:
+      label: 浏览器
+      multiple: true
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Other
+        
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: e.g., Ubuntu 24.04, Windows 11, macOS Sonoma
+    validations:
+      required: true
+      
+  - type: input
+    id: python-version
+    attributes:
+      label: Python 版本
+      placeholder: e.g., 3.10.12
+      
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js 版本
+      placeholder: e.g., 18.17.0
+      
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志输出
+      description: 请复制并粘贴任何相关的日志输出
+      render: shell
+      
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 如果适用，添加截图以帮助解释问题
+      
+  - type: textarea
+    id: additional
+    attributes:
+      label: 附加信息
+      description: 添加任何其他关于问题的上下文

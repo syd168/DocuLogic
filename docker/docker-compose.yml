@@ -1,0 +1,68 @@
+services:
+  doculogic:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: doculogic
+    restart: unless-stopped
+    runtime: nvidia
+    
+    # 仅暴露前端端口 80，后端通过 Nginx 内部代理
+    ports:
+      - "${HOST_PORT:-8030}:80"
+    
+    # 挂载数据卷
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/output:/data/output
+      - ${DATA_DIR:-~/doculogic/data}/logs:/app/logs
+      - ${DATA_DIR:-~/doculogic/data}/database:/app/web/data
+      - ${MODEL_DIR:-~/doculogic/models}:/app/weights
+    
+    # 环境变量配置
+    environment:
+      # JWT 密钥（生产环境务必修改）
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      # 模型路径
+      - MODEL_PATH=/app/weights
+      # 输出目录
+      - OUTPUT_DIR=/data/output
+      # CORS 配置
+      - CORS_ORIGINS=http://localhost,http://127.0.0.1
+      # 管理员用户名（可选）
+      - ADMIN_USERNAMES=${ADMIN_USERNAMES:-admin}
+      # PDF 最大页数
+      - PDF_MAX_PAGES=${PDF_MAX_PAGES:-80}
+      # 允许无模型启动
+      - ALLOW_START_WITHOUT_MODEL=${ALLOW_START_WITHOUT_MODEL:-1}
+      # 调试模式
+      - DEBUG_MODE=${DEBUG_MODE:-0}
+      # 邮件模拟模式
+      - EMAIL_MOCK=${EMAIL_MOCK:-true}
+    
+    # GPU 支持
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu]
+    
+    # 资源限制
+    mem_limit: ${MEM_LIMIT:-8g}
+    cpus: ${CPU_LIMIT:-4.0}
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

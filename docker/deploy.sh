@@ -179,13 +179,17 @@ echo "[6/7] 启动服务..."
 # 安全加载 .env 文件（处理特殊字符）
 if [ -f .env ]; then
     # 逐行读取并导出变量，避免特殊字符问题
-    while IFS='=' read -r key value; do
+    while IFS= read -r line; do
         # 跳过注释和空行
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$(echo "$line" | tr -d '[:space:]')" ]] && continue
         
-        # 去除值两边的引号和空格
-        value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//')
+        # 提取键值对（去除行尾注释）
+        key=$(echo "$line" | cut -d'=' -f1 | tr -d '[:space:]')
+        value=$(echo "$line" | cut -d'=' -f2- | sed 's/#.*//' | sed 's/^["'\'']*//;s/["'\'']*$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        # 跳过无效行
+        [[ -z "$key" ]] && continue
         
         # 导出变量
         export "$key"="$value"

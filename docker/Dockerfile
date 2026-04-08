@@ -37,7 +37,9 @@ WORKDIR /app
 
 # 复制 Python 依赖并安装
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+#如果部署太慢，可以更换其他源，如清华源，或者取消指定源：
+#pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn
 
 # 复制后端代码
 COPY web/ ./web/

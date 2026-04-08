@@ -10,8 +10,8 @@ from datetime import timedelta
 from typing import Optional
 import logging
 
-from ..cache import cache
-from ..auth_security import CODE_EXPIRE_MINUTES, hash_verification_code, verify_code_hash
+from app.cache import cache
+from app.auth_security import CODE_EXPIRE_MINUTES, hash_verification_code, verify_code_hash
 
 logger = logging.getLogger(__name__)
 

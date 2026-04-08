@@ -33,11 +33,20 @@ def revoke_token(token: str, reason: str = "manual_logout", ttl_seconds: int = 8
     """
     from app.auth_security import decode_token
     
-    # 解码 token 获取过期时间
+    # 解码 token 获取过期时间和用户信息
     payload = decode_token(token)
-    if not payload or "exp" not in payload:
-        logger.warning(f"无法解码 Token，跳过加入黑名单")
+    if not payload:
+        logger.warning(f"⚠️ 无法解码 Token（可能已过期或密钥变更），跳过加入黑名单")
         return False
+    
+    # 计算剩余有效期，作为黑名单的 TTL
+    if "exp" in payload:
+        remaining_seconds = payload["exp"] - int(datetime.utcnow().timestamp())
+        if remaining_seconds > 0:
+            ttl_seconds = min(ttl_seconds, remaining_seconds + 60)  # 额外加60秒缓冲
+        else:
+            logger.info(f"ℹ️ Token 已过期，无需加入黑名单")
+            return False
     
     key = f"token_blacklist:{token}"
     blacklist_data = {
@@ -243,7 +252,8 @@ def check_single_login(user_id: int, new_token: str) -> Optional[Dict[str, Any]]
             if success:
                 print(f"🔄 单点登录：用户 {user_id} 的旧 token 已被替换")
             else:
-                print(f"❌ 单点登录：无法拉黑旧 token (user_id={user_id})")
+                # 即使无法拉黑（如 token 已过期），也不影响新会话创建
+                print(f"⚠️ 单点登录：旧 token 未加入黑名单（可能已过期或无效），但新会话已创建 (user_id={user_id})")
         else:
             print(f"   - 跳过拉黑（token相同或为空）")
     

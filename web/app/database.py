@@ -114,6 +114,7 @@ def init_db():
     migrate_app_settings_auth_sms()
     migrate_app_settings_login_timeout()
     migrate_app_settings_password_rules()  # 密码规则配置
+    migrate_app_settings_init_defaults()  # 初始化默认配置值
     _bootstrap_settings_and_admins()  # 引导初始数据
 
 
@@ -365,6 +366,55 @@ def migrate_app_settings_password_rules():
     with engine.begin() as conn:
         for s in stmts:
             conn.execute(text(s))
+
+
+def migrate_app_settings_init_defaults():
+    """初始化 app_settings 的默认值（特别是登录/注册开关）。"""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if not insp.has_table("app_settings"):
+        return
+    
+    # 检查是否需要初始化（如果 login_email_enabled 为 NULL 或 0，则初始化）
+    with engine.begin() as conn:
+        result = conn.execute(text("SELECT login_email_enabled FROM app_settings WHERE id = 1"))
+        row = result.fetchone()
+        
+        # 如果值为 NULL、0 或不存在，则初始化默认值
+        should_init = False
+        if row is None:
+            should_init = True
+        elif row[0] is None or row[0] == 0:
+            should_init = True
+        
+        if should_init:
+            print("🔧 初始化系统设置默认值...")
+            update_sql = """
+            UPDATE app_settings SET
+                login_email_enabled = 1,
+                login_phone_enabled = 0,
+                register_email_enabled = 1,
+                register_phone_enabled = 0,
+                forgot_email_enabled = 1,
+                forgot_phone_enabled = 0,
+                email_mock = 1,
+                sms_mock = 1,
+                captcha_login_enabled = 0,
+                captcha_register_enabled = 0,
+                captcha_forgot_enabled = 0,
+                registration_enabled = 1,
+                password_min_length = 8,
+                password_require_uppercase = 1,
+                password_require_lowercase = 1,
+                password_require_digit = 1,
+                password_require_special = 0,
+                login_timeout_minutes = 10,
+                stale_job_timeout_minutes = 60
+            WHERE id = 1
+            """
+            conn.execute(text(update_sql))
+            print("✅ 系统设置已初始化")
 
 
 def get_db():

@@ -111,8 +111,8 @@ echo ""
 # 3.5. 数据迁移（如果切换到 MySQL）
 echo "[3.5/7] 检查数据库迁移..."
 
-# 读取 DATABASE_TYPE（去除注释和空格）
-DATABASE_TYPE=$(grep -E '^DATABASE_TYPE=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
+# 读取 DATABASE_TYPE（当前已在项目根目录）
+DATABASE_TYPE=$(grep -E '^DATABASE_TYPE=' .env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
 DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
 
 if [ "$DATABASE_TYPE" = "mysql" ]; then

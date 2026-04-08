@@ -95,13 +95,9 @@ services:
         max-size: "10m"
         max-file: "3"
     
-    # 依赖 Redis 和数据库服务
+    # 依赖 Redis（数据库服务通过 profiles 动态启用）
     depends_on:
       redis:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-      postgresql:
         condition: service_healthy
     networks:
       - doculogic-network
@@ -139,11 +135,13 @@ services:
     networks:
       - doculogic-network
 
-  # MySQL 数据库服务（可选，当 DATABASE_TYPE=mysql 时启用）
+  # MySQL 数据库服务（可选，当 DATABASE_TYPE=mysql 或 mariadb 时启用）
   mysql:
     image: mysql:8.0
     container_name: doculogic-mysql
     restart: unless-stopped
+    profiles:
+      - mysql  # 使用 --profile mysql 启用
     command: >
       mysqld
       --character-set-server=utf8mb4
@@ -191,6 +189,8 @@ services:
     image: postgres:16-alpine
     container_name: doculogic-postgresql
     restart: unless-stopped
+    profiles:
+      - postgresql  # 使用 --profile postgresql 启用
     command: >
       postgres
       -c max_connections=200

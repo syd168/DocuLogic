@@ -219,8 +219,37 @@ export MODEL_DIR="${MODEL_DIR:-${DATA_DIR}/models}"
 export HOST_PORT="${HOST_PORT:-8030}"
 export DATABASE_TYPE="${DATABASE_TYPE:-sqlite}"
 
+# 🎯 根据 DATABASE_TYPE 自动选择 Docker Compose profiles
+COMPOSE_PROFILES=""
+case "$DATABASE_TYPE" in
+    mysql|mariadb)
+        COMPOSE_PROFILES="mysql"
+        echo "📊 检测到使用 $DATABASE_TYPE 数据库，启用 MySQL 服务"
+        ;;
+    postgresql|postgres|pg)
+        COMPOSE_PROFILES="postgresql"
+        echo "📊 检测到使用 PostgreSQL 数据库，启用 PostgreSQL 服务"
+        ;;
+    sqlite)
+        COMPOSE_PROFILES=""
+        echo "📊 使用 SQLite 数据库，无需额外数据库服务"
+        ;;
+    *)
+        echo "⚠️  未知的数据库类型: $DATABASE_TYPE，默认使用 SQLite"
+        COMPOSE_PROFILES=""
+        ;;
+esac
+
 cd docker
-docker compose up -d
+if [ -n "$COMPOSE_PROFILES" ]; then
+    # 使用指定的 profile 启动
+    echo "🚀 启动命令: docker compose --profile $COMPOSE_PROFILES up -d"
+    docker compose --profile "$COMPOSE_PROFILES" up -d
+else
+    # 不使用 profile（SQLite 模式）
+    echo "🚀 启动命令: docker compose up -d"
+    docker compose up -d
+fi
 
 echo "✓ 服务已启动"
 echo ""
@@ -249,13 +278,28 @@ echo ""
 echo "数据目录: ${DATA_DIR}/"
 echo "  ├── output/      # 解析输出"
 echo "  ├── logs/        # 日志文件"
-echo "  ├── database/    # 数据库"
+echo "  ├── database/    # 数据库 (SQLite)"
+echo "  ├── mysql/       # MySQL 数据 (如使用)"
+echo "  ├── postgresql/  # PostgreSQL 数据 (如使用)"
 echo "  ├── redis/       # Redis缓存数据"
 echo "  └── models/      # 模型权重"
 echo ""
 echo "服务列表:"
 echo "  - doculogic      # 主应用（FastAPI + Nginx）"
 echo "  - redis          # Redis缓存服务"
+
+# 根据 DATABASE_TYPE 显示对应的数据库服务
+case "$DATABASE_TYPE" in
+    mysql|mariadb)
+        echo "  - mysql          # MySQL/MariaDB 数据库"
+        ;;
+    postgresql|postgres|pg)
+        echo "  - postgresql     # PostgreSQL 数据库"
+        ;;
+    sqlite)
+        echo "  ℹ️  使用 SQLite，无独立数据库服务"
+        ;;
+esac
 echo ""
 echo "常用命令:"
 echo "  查看日志:   cd docker && docker compose logs -f"
@@ -263,6 +307,18 @@ echo "  停止服务:   cd docker && docker compose down"
 echo "  重启服务:   cd docker && docker compose restart"
 echo "  进入容器:   docker exec -it doculogic bash"
 echo "  Redis CLI:  docker exec -it doculogic-redis redis-cli"
+
+# 根据 DATABASE_TYPE 显示对应的数据库管理命令
+case "$DATABASE_TYPE" in
+    mysql|mariadb)
+        echo "  MySQL CLI:    docker exec -it doculogic-mysql mysql -uroot -p"
+        echo "  MySQL Backup: docker exec doculogic-mysql mysqldump -uroot -p doculogic > backup.sql"
+        ;;
+    postgresql|postgres|pg)
+        echo "  PostgreSQL CLI: docker exec -it doculogic-postgresql psql -U postgres -d doculogic"
+        echo "  PG Backup:      docker exec doculogic-postgresql pg_dump -U postgres doculogic > backup.sql"
+        ;;
+esac
 echo ""
 echo "默认管理员账号:"
 echo "  用户名: admin"

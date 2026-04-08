@@ -3,36 +3,36 @@
 SQLite 到 MySQL 数据迁移工具
 
 功能：
-- 自动检测 SQLite 数据库
-- 导出所有表结构和数据
-- 导入到 MySQL 数据库
-- 支持增量迁移（跳过已存在的记录）
-- 保留外键关系和数据完整性
+- 从 SQLite 数据库导出数据
+- 生成兼容 MySQL 的 SQL 文件
+- 支持在本地或 Docker 环境中导入
 
 使用方法：
-    python migrate_sqlite_to_mysql.py
+    # 1. 导出 SQLite 数据为 SQL 文件
+    python migrate_sqlite_to_mysql.py export
     
-环境变量：
-    SQLITE_DB_PATH: SQLite 数据库路径（默认：web/data/app.db）
+    # 2. 导入到 MySQL（需要设置环境变量）
+    export MYSQL_PASSWORD=your_password
+    python migrate_sqlite_to_mysql.py import
+
+环境变量（仅导入时需要）：
     MYSQL_HOST: MySQL 主机（默认：localhost）
     MYSQL_PORT: MySQL 端口（默认：3306）
     MYSQL_USER: MySQL 用户名（默认：root）
-    MYSQL_PASSWORD: MySQL 密码
+    MYSQL_PASSWORD: MySQL 密码（必需）
     MYSQL_DATABASE: MySQL 数据库名（默认：doculogic）
 """
 
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 
 # 添加项目根目录到 Python 路径
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import sqlite3
-import pymysql
-from sqlalchemy import create_engine, inspect, MetaData, Table
-from tqdm import tqdm
 
 
 def get_sqlite_connection():
@@ -50,64 +50,6 @@ def get_sqlite_connection():
     conn = sqlite3.connect(sqlite_path)
     conn.row_factory = sqlite3.Row
     return conn
-
-
-def get_mysql_connection():
-    """获取 MySQL 连接"""
-    mysql_host = os.environ.get("MYSQL_HOST", "localhost")
-    mysql_port = int(os.environ.get("MYSQL_PORT", "3306"))
-    mysql_user = os.environ.get("MYSQL_USER", "root")
-    mysql_password = os.environ.get("MYSQL_PASSWORD", "")
-    mysql_database = os.environ.get("MYSQL_DATABASE", "doculogic")
-    
-    if not mysql_password:
-        print("❌ 请设置 MYSQL_PASSWORD 环境变量")
-        return None
-    
-    print(f"📊 MySQL 数据库: {mysql_host}:{mysql_port}/{mysql_database}")
-    
-    try:
-        conn = pymysql.connect(
-            host=mysql_host,
-            port=mysql_port,
-            user=mysql_user,
-            password=mysql_password,
-            database=mysql_database,
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        return conn
-    except Exception as e:
-        print(f"❌ MySQL 连接失败: {e}")
-        return None
-
-
-def get_table_names(sqlite_conn):
-    """获取所有表名"""
-    cursor = sqlite_conn.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-    tables = [row[0] for row in cursor.fetchall()]
-    return tables
-
-
-def get_table_schema(sqlite_conn, table_name):
-    """获取表结构"""
-    cursor = sqlite_conn.cursor()
-    cursor.execute(f"PRAGMA table_info({table_name})")
-    columns = cursor.fetchall()
-    
-    schema = []
-    for col in columns:
-        cid, name, col_type, notnull, default_value, pk = col
-        schema.append({
-            'name': name,
-            'type': col_type,
-            'notnull': notnull,
-            'default': default_value,
-            'pk': pk
-        })
-    
-    return schema
 
 
 def convert_sqlite_type_to_mysql(sqlite_type):
@@ -128,11 +70,9 @@ def convert_sqlite_type_to_mysql(sqlite_type):
     
     sqlite_type_upper = sqlite_type.upper()
     
-    # 精确匹配
     if sqlite_type_upper in type_mapping:
         return type_mapping[sqlite_type_upper]
     
-    # 模糊匹配
     if 'INT' in sqlite_type_upper:
         return 'INT'
     if 'CHAR' in sqlite_type_upper or 'TEXT' in sqlite_type_upper:
@@ -144,191 +84,275 @@ def convert_sqlite_type_to_mysql(sqlite_type):
     if 'BLOB' in sqlite_type_upper:
         return 'LONGBLOB'
     
-    # 默认使用 TEXT
     return 'LONGTEXT'
 
 
-def create_mysql_table(mysql_conn, table_name, schema):
-    """在 MySQL 中创建表"""
-    cursor = mysql_conn.cursor()
-    
-    # 检查表是否已存在
-    cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
-    if cursor.fetchone():
-        print(f"  ⚠️  表 {table_name} 已存在，跳过创建")
-        return True
-    
-    # 构建 CREATE TABLE 语句
-    columns = []
-    primary_keys = []
-    
-    for col in schema:
-        mysql_type = convert_sqlite_type_to_mysql(col['type'])
-        col_def = f"`{col['name']}` {mysql_type}"
-        
-        if col['notnull']:
-            col_def += " NOT NULL"
-        
-        if col['default'] is not None:
-            if col['default'] == 'CURRENT_TIMESTAMP':
-                col_def += f" DEFAULT {col['default']}"
-            else:
-                # 处理字符串默认值
-                default_val = str(col['default'])
-                if default_val.upper() not in ('NULL', 'CURRENT_TIMESTAMP'):
-                    default_val = f"'{default_val}'"
-                col_def += f" DEFAULT {default_val}"
-        
-        if col['pk']:
-            primary_keys.append(col['name'])
-        
-        columns.append(col_def)
-    
-    if primary_keys:
-        columns.append(f"PRIMARY KEY ({', '.join([f'`{k}`' for k in primary_keys])})")
-    
-    create_sql = f"CREATE TABLE `{table_name}` (\n  " + ",\n  ".join(columns) + "\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-    
-    try:
-        cursor.execute(create_sql)
-        mysql_conn.commit()
-        print(f"  ✅ 创建表: {table_name}")
-        return True
-    except Exception as e:
-        print(f"  ❌ 创建表失败 {table_name}: {e}")
-        return False
-
-
-def migrate_table_data(sqlite_conn, mysql_conn, table_name):
-    """迁移表数据"""
-    # 获取 SQLite 数据
-    sqlite_cursor = sqlite_conn.cursor()
-    sqlite_cursor.execute(f"SELECT * FROM {table_name}")
-    rows = sqlite_cursor.fetchall()
-    
-    if not rows:
-        print(f"  ℹ️  表 {table_name} 无数据，跳过")
-        return True
-    
-    # 获取列名
-    columns = [description[0] for description in sqlite_cursor.description]
-    
-    # 检查 MySQL 中是否已有数据
-    mysql_cursor = mysql_conn.cursor()
-    mysql_cursor.execute(f"SELECT COUNT(*) as count FROM `{table_name}`")
-    existing_count = mysql_cursor.fetchone()['count']
-    
-    if existing_count > 0:
-        print(f"  ⚠️  表 {table_name} 已有 {existing_count} 条记录，跳过导入")
-        return True
-    
-    # 插入数据
-    placeholders = ', '.join(['%s'] * len(columns))
-    column_names = ', '.join([f'`{col}`' for col in columns])
-    insert_sql = f"INSERT INTO `{table_name}` ({column_names}) VALUES ({placeholders})"
-    
-    success_count = 0
-    error_count = 0
-    
-    for row in tqdm(rows, desc=f"  迁移 {table_name}", unit="行"):
-        try:
-            # 转换数据格式
-            values = []
-            for val in row:
-                if isinstance(val, bytes):
-                    # BLOB 数据
-                    values.append(val)
-                else:
-                    values.append(val)
-            
-            mysql_cursor.execute(insert_sql, values)
-            success_count += 1
-        except Exception as e:
-            error_count += 1
-            if error_count <= 3:  # 只显示前3个错误
-                print(f"    ❌ 插入失败: {e}")
-    
-    if error_count > 0:
-        mysql_conn.rollback()
-        print(f"  ❌ 迁移失败: 成功 {success_count}, 失败 {error_count}")
-        return False
+def escape_mysql_value(value):
+    """转义 MySQL 值"""
+    if value is None:
+        return 'NULL'
+    elif isinstance(value, bytes):
+        # BLOB 数据转换为十六进制
+        return f"X'{value.hex()}'"
+    elif isinstance(value, str):
+        # 字符串需要转义
+        escaped = value.replace("'", "''").replace("\\", "\\\\")
+        return f"'{escaped}'"
+    elif isinstance(value, bool):
+        return '1' if value else '0'
     else:
-        mysql_conn.commit()
-        print(f"  ✅ 迁移完成: {success_count} 条记录")
-        return True
+        return str(value)
 
 
-def migrate_sqlite_to_mysql():
-    """主迁移函数"""
-    print("=" * 60)
-    print("  SQLite → MySQL 数据迁移工具")
-    print("=" * 60)
-    print()
+def export_to_sql(sqlite_conn, output_file):
+    """导出 SQLite 数据为 MySQL 兼容的 SQL 文件"""
+    cursor = sqlite_conn.cursor()
     
-    # 连接数据库
-    sqlite_conn = get_sqlite_connection()
-    if not sqlite_conn:
-        return False
+    # 获取所有表
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+    tables = [row[0] for row in cursor.fetchall()]
     
-    mysql_conn = get_mysql_connection()
-    if not mysql_conn:
-        sqlite_conn.close()
-        return False
+    print(f"\n📋 发现 {len(tables)} 个表: {', '.join(tables)}\n")
     
-    try:
-        # 获取所有表
-        tables = get_table_names(sqlite_conn)
-        print(f"\n📋 发现 {len(tables)} 个表: {', '.join(tables)}\n")
+    with open(output_file, 'w', encoding='utf-8') as f:
+        # 写入文件头
+        f.write("-- ============================================\n")
+        f.write("-- SQLite to MySQL Migration Script\n")
+        f.write(f"-- Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("-- ============================================\n\n")
+        f.write("SET NAMES utf8mb4;\n")
+        f.write("SET FOREIGN_KEY_CHECKS = 0;\n\n")
         
-        # 迁移每个表
-        success_tables = []
-        failed_tables = []
+        total_rows = 0
         
         for table_name in tables:
-            print(f"🔄 处理表: {table_name}")
+            print(f"🔄 导出表: {table_name}")
             
-            # 1. 获取表结构
-            schema = get_table_schema(sqlite_conn, table_name)
+            # 获取表结构
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = cursor.fetchall()
             
-            # 2. 创建 MySQL 表
-            if not create_mysql_table(mysql_conn, table_name, schema):
-                failed_tables.append(table_name)
-                continue
+            # 生成 CREATE TABLE 语句
+            f.write(f"-- 表: {table_name}\n")
+            f.write(f"DROP TABLE IF EXISTS `{table_name}`;\n")
+            f.write(f"CREATE TABLE `{table_name}` (\n")
             
-            # 3. 迁移数据
-            if migrate_table_data(sqlite_conn, mysql_conn, table_name):
-                success_tables.append(table_name)
+            col_defs = []
+            primary_keys = []
+            
+            for col in columns:
+                cid, name, col_type, notnull, default_value, pk = col
+                mysql_type = convert_sqlite_type_to_mysql(col_type)
+                
+                col_def = f"  `{name}` {mysql_type}"
+                
+                if notnull:
+                    col_def += " NOT NULL"
+                
+                if default_value is not None:
+                    if default_value == 'CURRENT_TIMESTAMP':
+                        col_def += f" DEFAULT {default_value}"
+                    else:
+                        col_def += f" DEFAULT '{default_value}'"
+                
+                if pk:
+                    primary_keys.append(name)
+                
+                col_defs.append(col_def)
+            
+            if primary_keys:
+                col_defs.append(f"  PRIMARY KEY ({', '.join([f'`{k}`' for k in primary_keys])})")
+            
+            f.write(",\n".join(col_defs) + "\n")
+            f.write(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n")
+            
+            # 导出数据
+            cursor.execute(f"SELECT * FROM {table_name}")
+            rows = cursor.fetchall()
+            
+            if rows:
+                col_names = [description[0] for description in cursor.description]
+                
+                f.write(f"-- 数据: {table_name} ({len(rows)} 行)\n")
+                f.write(f"INSERT INTO `{table_name}` ({', '.join([f'`{c}`' for c in col_names])}) VALUES\n")
+                
+                for i, row in enumerate(rows):
+                    values = [escape_mysql_value(val) for val in row]
+                    line = f"  ({', '.join(values)})"
+                    
+                    if i < len(rows) - 1:
+                        line += ","
+                    else:
+                        line += ";"
+                    
+                    f.write(line + "\n")
+                
+                f.write("\n")
+                total_rows += len(rows)
+                print(f"  ✅ 导出 {len(rows)} 行")
             else:
-                failed_tables.append(table_name)
+                print(f"  ℹ️  无数据")
             
-            print()
+            f.write("\n")
         
-        # 总结
-        print("=" * 60)
-        print("  迁移完成")
-        print("=" * 60)
-        print(f"✅ 成功: {len(success_tables)} 个表")
-        if success_tables:
-            print(f"   - {', '.join(success_tables)}")
+        # 写入文件尾
+        f.write("SET FOREIGN_KEY_CHECKS = 1;\n")
         
-        if failed_tables:
-            print(f"❌ 失败: {len(failed_tables)} 个表")
-            print(f"   - {', '.join(failed_tables)}")
-            return False
+        print(f"\n✅ 导出完成！")
+        print(f"   文件: {output_file}")
+        print(f"   表数: {len(tables)}")
+        print(f"   总行数: {total_rows}")
+
+
+def import_to_mysql(sql_file):
+    """导入 SQL 文件到 MySQL"""
+    try:
+        import pymysql
+    except ImportError:
+        print("❌ 缺少 pymysql 依赖，请安装: pip install pymysql")
+        return False
+    
+    mysql_host = os.environ.get("MYSQL_HOST", "localhost")
+    mysql_port = int(os.environ.get("MYSQL_PORT", "3306"))
+    mysql_user = os.environ.get("MYSQL_USER", "root")
+    mysql_password = os.environ.get("MYSQL_PASSWORD", "")
+    mysql_database = os.environ.get("MYSQL_DATABASE", "doculogic")
+    
+    if not mysql_password:
+        print("❌ 请设置 MYSQL_PASSWORD 环境变量")
+        print("   示例: export MYSQL_PASSWORD=your_password")
+        return False
+    
+    if not Path(sql_file).exists():
+        print(f"❌ SQL 文件不存在: {sql_file}")
+        return False
+    
+    print(f"📊 MySQL 数据库: {mysql_host}:{mysql_port}/{mysql_database}")
+    print(f"📄 SQL 文件: {sql_file}")
+    print()
+    
+    try:
+        # 连接 MySQL
+        conn = pymysql.connect(
+            host=mysql_host,
+            port=mysql_port,
+            user=mysql_user,
+            password=mysql_password,
+            database=mysql_database,
+            charset='utf8mb4'
+        )
         
-        print("\n🎉 所有数据已成功迁移到 MySQL！")
-        return True
+        print("✅ MySQL 连接成功")
+        
+        # 读取 SQL 文件
+        with open(sql_file, 'r', encoding='utf-8') as f:
+            sql_content = f.read()
+        
+        # 执行 SQL
+        cursor = conn.cursor()
+        
+        # 分割 SQL 语句（按分号分割）
+        statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip() and not stmt.strip().startswith('--')]
+        
+        print(f"🔄 开始导入... ({len(statements)} 条语句)")
+        
+        success_count = 0
+        error_count = 0
+        
+        for i, statement in enumerate(statements, 1):
+            try:
+                cursor.execute(statement)
+                success_count += 1
+                
+                # 每 10 条显示一次进度
+                if i % 10 == 0:
+                    print(f"  进度: {i}/{len(statements)}")
+            except Exception as e:
+                error_count += 1
+                print(f"  ❌ 错误 (语句 {i}): {str(e)[:100]}")
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        print(f"\n✅ 导入完成！")
+        print(f"   成功: {success_count} 条语句")
+        if error_count > 0:
+            print(f"   失败: {error_count} 条语句")
+        
+        return error_count == 0
         
     except Exception as e:
-        print(f"\n❌ 迁移过程出错: {e}")
+        print(f"\n❌ 导入失败: {e}")
         import traceback
         traceback.print_exc()
         return False
-    finally:
-        sqlite_conn.close()
-        mysql_conn.close()
+
+
+def main():
+    """主函数"""
+    if len(sys.argv) < 2:
+        print("用法:")
+        print("  python migrate_sqlite_to_mysql.py export    # 导出 SQLite 为 SQL 文件")
+        print("  python migrate_sqlite_to_mysql.py import    # 导入 SQL 文件到 MySQL")
+        print()
+        print("示例:")
+        print("  # 1. 导出")
+        print("  python migrate_sqlite_to_mysql.py export")
+        print()
+        print("  # 2. 导入（需要设置 MySQL 密码）")
+        print("  export MYSQL_PASSWORD=your_password")
+        print("  python migrate_sqlite_to_mysql.py import")
+        sys.exit(1)
+    
+    command = sys.argv[1].lower()
+    
+    if command == "export":
+        print("=" * 60)
+        print("  SQLite → SQL 导出工具")
+        print("=" * 60)
+        print()
+        
+        sqlite_conn = get_sqlite_connection()
+        if not sqlite_conn:
+            sys.exit(1)
+        
+        # 生成输出文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = PROJECT_ROOT / f"migration_{timestamp}.sql"
+        
+        try:
+            export_to_sql(sqlite_conn, str(output_file))
+        finally:
+            sqlite_conn.close()
+    
+    elif command == "import":
+        print("=" * 60)
+        print("  SQL → MySQL 导入工具")
+        print("=" * 60)
+        print()
+        
+        # 查找最新的 SQL 文件
+        sql_files = list(PROJECT_ROOT.glob("migration_*.sql"))
+        
+        if not sql_files:
+            print("❌ 未找到迁移文件，请先执行导出")
+            print("   python migrate_sqlite_to_mysql.py export")
+            sys.exit(1)
+        
+        # 使用最新的文件
+        sql_file = max(sql_files, key=lambda p: p.stat().st_mtime)
+        print(f"📄 使用迁移文件: {sql_file.name}")
+        print()
+        
+        success = import_to_mysql(str(sql_file))
+        sys.exit(0 if success else 1)
+    
+    else:
+        print(f"❌ 未知命令: {command}")
+        print("   可用命令: export, import")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    success = migrate_sqlite_to_mysql()
-    sys.exit(0 if success else 1)
+    main()

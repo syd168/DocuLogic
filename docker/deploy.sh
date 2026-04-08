@@ -176,19 +176,27 @@ echo ""
 # 6. 启动服务
 echo "[6/7] 启动服务..."
 
-# 加载 .env 环境变量到当前 shell（当前已在项目根目录）
-set -a
-source .env
-set +a
+# 安全加载 .env 文件（处理特殊字符）
+if [ -f .env ]; then
+    # 逐行读取并导出变量，避免特殊字符问题
+    while IFS='=' read -r key value; do
+        # 跳过注释和空行
+        [[ "$key" =~ ^#.*$ ]] && continue
+        [[ -z "$key" ]] && continue
+        
+        # 去除值两边的引号和空格
+        value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//')
+        
+        # 导出变量
+        export "$key"="$value"
+    done < .env
+fi
 
-# 导出 Docker Compose 需要的变量
-export DATA_DIR="${DATA_DIR}"
-export MODEL_DIR="${MODEL_DIR}"
-export HOST_PORT="${HOST_PORT}"
-export DATABASE_TYPE="${DATABASE_TYPE}"
-export MYSQL_PASSWORD="${MYSQL_PASSWORD}"
-export MYSQL_USER="${MYSQL_USER}"
-export MYSQL_DATABASE="${MYSQL_DATABASE}"
+# 确保关键变量已设置
+export DATA_DIR="${DATA_DIR:-${HOME}/doculogic}"
+export MODEL_DIR="${MODEL_DIR:-${DATA_DIR}/models}"
+export HOST_PORT="${HOST_PORT:-8030}"
+export DATABASE_TYPE="${DATABASE_TYPE:-sqlite}"
 
 cd docker
 docker compose up -d

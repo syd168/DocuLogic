@@ -114,6 +114,10 @@ def export_to_sql(sqlite_conn, output_file):
     
     print(f"\n📋 发现 {len(tables)} 个表: {', '.join(tables)}\n")
     
+    # 确保输出目录存在
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
     with open(output_file, 'w', encoding='utf-8') as f:
         # 写入文件头
         f.write("-- ============================================\n")
@@ -317,9 +321,8 @@ def main():
         if not sqlite_conn:
             sys.exit(1)
         
-        # 生成输出文件名
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = PROJECT_ROOT / f"migration_{timestamp}.sql"
+        # 固定输出路径：web/data/mysql.sql
+        output_file = PROJECT_ROOT / "web" / "data" / "mysql.sql"
         
         try:
             export_to_sql(sqlite_conn, str(output_file))
@@ -332,17 +335,15 @@ def main():
         print("=" * 60)
         print()
         
-        # 查找最新的 SQL 文件
-        sql_files = list(PROJECT_ROOT.glob("migration_*.sql"))
+        # 使用固定路径：web/data/mysql.sql
+        sql_file = PROJECT_ROOT / "web" / "data" / "mysql.sql"
         
-        if not sql_files:
+        if not sql_file.exists():
             print("❌ 未找到迁移文件，请先执行导出")
             print("   python migrate_sqlite_to_mysql.py export")
             sys.exit(1)
         
-        # 使用最新的文件
-        sql_file = max(sql_files, key=lambda p: p.stat().st_mtime)
-        print(f"📄 使用迁移文件: {sql_file.name}")
+        print(f"📄 使用迁移文件: {sql_file}")
         print()
         
         success = import_to_mysql(str(sql_file))

@@ -121,28 +121,29 @@ if [ "$DATABASE_TYPE" = "mysql" ]; then
     
     # 检查 SQLite 数据库是否存在
     SQLITE_DB="web/data/app.db"
-    if [ -f "$SQLITE_DB" ]; then
-        echo "⚠️  发现 SQLite 数据库: $SQLITE_DB"
-        echo "   是否迁移数据到 MySQL？"
-        read -p "   执行迁移？[y/N]: " -n 1 -r
+    MYSQL_SQL="web/data/mysql.sql"
+    
+    if [ -f "$SQLITE_DB" ] && [ ! -f "$MYSQL_SQL" ]; then
+        echo "⚠️  发现 SQLite 数据库，但未找到 MySQL 迁移文件"
+        echo "   是否现在导出为 SQL 文件？"
+        read -p "   执行导出？[y/N]: " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "🔄 开始迁移数据..."
+            echo "🔄 开始导出数据..."
             
-            # 加载 .env 环境变量
-            set -a
-            source .env
-            set +a
-            
-            # 执行迁移脚本
-            if python3 migrate_sqlite_to_mysql.py; then
-                echo "✅ 数据迁移成功"
+            # 执行导出脚本
+            if python3 migrate_sqlite_to_mysql.py export; then
+                echo "✅ 数据导出成功: $MYSQL_SQL"
             else
-                echo "⚠️  数据迁移失败，但将继续部署（MySQL 将使用空数据库）"
+                echo "❌ 数据导出失败"
+                exit 1
             fi
         else
-            echo "ℹ️  跳过迁移，MySQL 将从空数据库开始"
+            echo "ℹ️  跳过导出，MySQL 将从空数据库开始"
         fi
+    elif [ -f "$MYSQL_SQL" ]; then
+        echo "✅ 找到 MySQL 迁移文件: $MYSQL_SQL"
+        echo "   Docker 启动后将自动导入数据"
     else
         echo "✓ 未发现 SQLite 数据库，MySQL 将从空数据库开始"
     fi

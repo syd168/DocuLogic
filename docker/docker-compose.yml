@@ -146,6 +146,8 @@ services:
     # 数据持久化
     volumes:
       - ${DATA_DIR:-~/doculogic/data}/mysql:/var/lib/mysql
+      # 挂载初始化脚本
+      - ../web/data/mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro
     
     # 健康检查
     healthcheck:

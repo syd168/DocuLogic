@@ -1135,6 +1135,7 @@
               <div class="profile-actions">
                 <el-button @click="activeMenu = 'records'">查看生成记录</el-button>
                 <el-button @click="activeMenu = 'cache'">清理缓存</el-button>
+                <el-button type="primary" plain @click="refreshProfile">🔄 刷新信息</el-button>
               </div>
             </div>
 
@@ -2667,6 +2668,35 @@ async function changePassword() {
     pwErr.value = e.response?.data?.detail || e.message
   } finally {
     pwLoading.value = false
+  }
+}
+
+/** 刷新个人中心信息 */
+async function refreshProfile() {
+  try {
+    const { data } = await http.get('/api/auth/me')
+    
+    // 更新用户详细信息
+    Object.assign(userProfile, {
+      id: data.id,
+      username: data.username,
+      email: data.email,
+      phone: data.phone || '',
+      is_admin: !!data.is_admin,
+      is_active: !!data.is_active,
+      created_at: data.created_at,
+      pdf_max_pages_global: data.pdf_max_pages_global || 80,
+      pdf_max_pages_personal: data.pdf_max_pages_personal,
+      pdf_max_pages_effective: data.pdf_max_pages_effective || 80,
+      pdf_use_default: !!data.pdf_use_default,
+      can_download_images: !!data.can_download_images,
+      image_output_mode: data.image_output_mode || null,
+      image_output_use_default: !!data.image_output_use_default,
+    })
+    
+    ElMessage.success('个人信息已刷新')
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '获取用户信息失败')
   }
 }
 

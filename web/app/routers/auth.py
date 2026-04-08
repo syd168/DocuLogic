@@ -29,6 +29,12 @@ from ..verification_cache import (
     delete_verification_code,
     verify_verification_code,
 )
+from ..session_manager import (
+    create_user_session,
+    destroy_user_session,
+    revoke_token,
+    check_single_login,
+)
 from ..captcha import verify_captcha
 from ..database import get_db
 from ..deps import get_current_user
@@ -359,6 +365,22 @@ async def register(request: Request, body: RegisterBody, db: Session = Depends(g
         {"sub": str(user.id), "username": user.username},
         expires_delta=timedelta(minutes=timeout_minutes)
     )
+    
+    # 检查单点登录（如果用户已在其他终端登录，旧 token 将被拉黑）
+    old_session = check_single_login(user.id, token)
+    if old_session:
+        logger.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
+    
+    # 创建新的用户会话
+    create_user_session(
+        user_id=user.id,
+        username=user.username,
+        token=token,
+        ip_address=request.client.host if request.client else "",
+        user_agent=request.headers.get("user-agent", ""),
+        ttl_seconds=timeout_minutes * 60
+    )
+    
     resp = JSONResponse(
         content={"ok": True, "message": "注册成功", "username": user.username},
         status_code=201,
@@ -421,6 +443,22 @@ async def login(request: Request, body: LoginBody, db: Session = Depends(get_db)
         {"sub": str(user.id), "username": user.username},
         expires_delta=timedelta(minutes=timeout_minutes)
     )
+    
+    # 检查单点登录（如果用户已在其他终端登录，旧 token 将被拉黑）
+    old_session = check_single_login(user.id, token)
+    if old_session:
+        logger.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
+    
+    # 创建新的用户会话
+    create_user_session(
+        user_id=user.id,
+        username=user.username,
+        token=token,
+        ip_address=request.client.host if request.client else "",
+        user_agent=request.headers.get("user-agent", ""),
+        ttl_seconds=timeout_minutes * 60
+    )
+    
     resp = JSONResponse(content={"ok": True, "username": user.username})
     resp.set_cookie(
         key="access_token",
@@ -434,8 +472,27 @@ async def login(request: Request, body: LoginBody, db: Session = Depends(get_db)
 
 
 @router.post("/logout")
-async def logout():
-    resp = JSONResponse(content={"ok": True})
+async def logout(request: Request, db: Session = Depends(get_db)):
+    """用户登出，将 Token 加入黑名单并销毁会话"""
+    from ..deps import get_token_from_request
+    from ..auth_security import decode_token
+    
+    token = get_token_from_request(request)
+    if token:
+        # 解码 token 获取用户 ID
+        payload = decode_token(token)
+        if payload and "sub" in payload:
+            try:
+                user_id = int(payload["sub"])
+                # 将 token 加入黑名单
+                revoke_token(token, reason="manual_logout")
+                # 销毁用户会话
+                destroy_user_session(user_id, reason="logout")
+                logger.info(f"用户 {user_id} 已登出")
+            except (TypeError, ValueError):
+                pass
+    
+    resp = JSONResponse(content={"ok": True, "message": "已登出"})
     resp.delete_cookie("access_token", path="/")
     return resp
 

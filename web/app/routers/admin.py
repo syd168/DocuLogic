@@ -736,3 +736,109 @@ async def admin_create_user(
             "pdf_max_pages": new_user.pdf_max_pages,
         }
     }
+
+
+# ==================== 用户会话管理 API ====================
+
+@router.get("/users/{user_id}/session")
+def get_user_session_info(
+    user_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """获取用户当前会话信息（管理员专用）"""
+    from ..session_manager import get_user_session
+    
+    # 检查用户是否存在
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    session_data = get_user_session(user_id)
+    
+    if not session_data:
+        return {
+            "ok": True,
+            "has_session": False,
+            "message": "用户当前没有活跃会话",
+        }
+    
+    return {
+        "ok": True,
+        "has_session": True,
+        "session": {
+            "user_id": session_data.get("user_id"),
+            "username": session_data.get("username"),
+            "ip_address": session_data.get("ip_address", ""),
+            "user_agent": session_data.get("user_agent", ""),
+            "login_at": session_data.get("login_at"),
+            "last_active": session_data.get("last_active"),
+        }
+    }
+
+
+@router.post("/users/{user_id}/kick")
+def kick_user(
+    user_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """踢出用户（强制登出）"""
+    from ..session_manager import kick_user as do_kick_user
+    
+    # 检查用户是否存在
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 不能踢出自己
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="不能踢出自己")
+    
+    # 执行踢出操作
+    success = do_kick_user(user_id, admin_username=admin.username)
+    
+    _log.info(f"管理员 {admin.username} 踢出了用户 {user.username} (ID: {user_id})")
+    
+    return {
+        "ok": True,
+        "message": f"已踢出用户 '{user.username}'",
+        "kicked_user": user.username,
+    }
+
+
+@router.get("/sessions/online-users")
+def get_online_users(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """获取所有在线用户列表（管理员专用）"""
+    from ..session_manager import cache
+    
+    # 查找所有用户会话键
+    session_keys = cache.keys("user_session:*")
+    
+    online_users = []
+    for key in session_keys:
+        session_data = cache.get(key)
+        if session_data:
+            user_id = session_data.get("user_id")
+            # 从数据库获取用户详细信息
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                online_users.append({
+                    "user_id": user_id,
+                    "username": session_data.get("username"),
+                    "email": user.email,
+                    "is_admin": user.is_admin,
+                    "ip_address": session_data.get("ip_address", ""),
+                    "user_agent": session_data.get("user_agent", ""),
+                    "login_at": session_data.get("login_at"),
+                    "last_active": session_data.get("last_active"),
+                })
+    
+    return {
+        "ok": True,
+        "total": len(online_users),
+        "users": online_users,
+    }

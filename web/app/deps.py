@@ -32,9 +32,30 @@ def get_current_user(
         uid = int(payload["sub"])
     except (TypeError, ValueError):
         raise HTTPException(status_code=401, detail="无效令牌")
+    
+    # 检查 Token 是否在黑名单中
+    from .session_manager import is_token_blacklisted, validate_token_with_session
+    if is_token_blacklisted(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token 已被撤销，请重新登录",
+        )
+    
+    # 验证 Token 是否与会话匹配（单点登录检查）
+    if not validate_token_with_session(token, uid):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="账号已在其他终端登录，当前会话已失效",
+        )
+    
     user = db.query(User).filter(User.id == uid, User.is_active.is_(True)).first()
     if not user:
         raise HTTPException(status_code=401, detail="用户不存在或已禁用")
+    
+    # 更新会话活跃时间
+    from .session_manager import update_session_activity
+    update_session_activity(uid)
+    
     return user
 
 

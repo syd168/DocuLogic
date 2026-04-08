@@ -1,4 +1,4 @@
-u#!/bin/bash
+#!/bin/bash
 set -e
 
 # DocuLogic Docker 一键部署脚本
@@ -6,6 +6,13 @@ echo "========================================="
 echo "  DocuLogic 一键部署"
 echo "========================================="
 echo ""
+
+# 获取脚本所在目录的父目录（项目根目录）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# 切换到项目根目录
+cd "${PROJECT_ROOT}"
 
 # 配置
 DATA_DIR="${DATA_DIR:-${HOME}/doculogic}"
@@ -117,7 +124,6 @@ export HOST_PORT="${HOST_PORT}"
 
 cd docker
 docker compose up -d
-cd ..
 
 echo "✓ 服务已启动"
 echo ""

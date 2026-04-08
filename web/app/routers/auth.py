@@ -792,4 +792,10 @@ async def change_password(
     
     user.hashed_password = hash_password(body.new_password)
     db.commit()
-    return {"ok": True, "message": "密码已更新"}
+    
+    # ✅ 销毁该用户的所有活跃会话（除当前会话外），强制其他终端重新登录
+    from ..session_manager import destroy_user_session
+    destroy_user_session(user.id, reason="password_changed")
+    _log.info(f"用户 {user.id} 密码已修改，所有会话已销毁")
+    
+    return {"ok": True, "message": "密码已更新，请重新登录"}

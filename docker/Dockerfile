@@ -82,9 +82,10 @@ ENV PYTHONUNBUFFERED=1 \
 # 暴露端口（仅前端端口）
 EXPOSE 80
 
-# 健康检查
+# 健康检查：同时检查 Nginx、后端服务和数据库连接
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
+    CMD curl -f http://localhost/health && \
+        curl -f http://localhost:8000/health || exit 1
 
 # 启动脚本：同时运行 Nginx、cron 和后端
 CMD bash -c "nginx && cron && python web_server.py"

@@ -24,6 +24,16 @@ ACCESS_TOKEN_EXPIRE_DAYS = int(os.environ.get("ACCESS_TOKEN_EXPIRE_DAYS", "7"))
 
 # 安全检查：防止使用默认密钥
 if JWT_SECRET == "change-me-use-openssl-rand-hex-32":
+    # ✅ 生产环境强制退出，开发环境仅警告
+    env = os.environ.get("ENVIRONMENT", "").lower()
+    if env in ("production", "prod"):
+        raise RuntimeError(
+            "⛔ 生产环境检测到默认 JWT_SECRET！\n"
+            "请立即修改 .env 文件中的 JWT_SECRET 为强随机值。\n"
+            "生成命令：python3 -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    
+    # 开发/测试环境仅警告
     import warnings
     warnings.warn(
         "⚠️  警告：检测到使用默认 JWT_SECRET！\n"

@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.websockets import WebSocketDisconnect
 
@@ -1084,8 +1085,39 @@ async def download_result(
 
 
 @app.get("/health")
-async def health_check():
-    return {"status": "healthy", "model_loaded": model is not None}
+async def health_check(db: Session = Depends(get_db)):
+    """
+    综合健康检查端点
+    
+    检查项：
+    - Nginx: 通过请求到达此端点即表示 Nginx 正常
+    - Backend: FastAPI 服务正常运行
+    - Database: 数据库连接正常
+    - Model: 模型加载状态（可选）
+    """
+    checks = {
+        "nginx": "ok",  # 能到达此端点说明 Nginx 正常
+        "backend": "ok",  # FastAPI 正常运行
+    }
+    
+    # 检查数据库连接
+    try:
+        db.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)}"
+    
+    # 检查模型状态（不影响整体健康状态）
+    checks["model_loaded"] = model is not None
+    
+    # 如果数据库异常，返回 503
+    if checks["database"] != "ok":
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "checks": checks}
+        )
+    
+    return {"status": "healthy", "checks": checks}
 
 
 @app.post("/api/jobs/batch-download")

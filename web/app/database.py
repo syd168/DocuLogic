@@ -2,7 +2,7 @@
 数据库配置和迁移管理
 
 本模块负责：
-- 数据库连接配置（支持 SQLite 和其他数据库）
+- 数据库连接配置（支持 SQLite 和 MySQL）
 - 会话管理
 - 数据库表结构初始化
 - 增量数据迁移（向后兼容）
@@ -11,15 +11,52 @@
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 CURRENT_DIR = Path(__file__).parent
 DEFAULT_SQLITE = CURRENT_DIR.parent / "data" / "app.db"  # 默认 SQLite 数据库路径
 os.makedirs(DEFAULT_SQLITE.parent, exist_ok=True)
 
-# 从环境变量读取数据库 URL，默认使用 SQLite
-DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE.resolve()}")
+
+def _build_database_url() -> str:
+    """
+    根据环境变量构建数据库 URL
+    
+    支持两种模式：
+    1. SQLite（默认）：适合本地开发
+    2. MySQL：适合生产环境，支持 Docker 部署
+    
+    Returns:
+        str: 数据库连接 URL
+    """
+    db_type = os.environ.get("DATABASE_TYPE", "sqlite").lower()
+    
+    if db_type == "mysql":
+        # MySQL 配置
+        mysql_host = os.environ.get("MYSQL_HOST", "localhost")
+        mysql_port = os.environ.get("MYSQL_PORT", "3306")
+        mysql_user = os.environ.get("MYSQL_USER", "root")
+        mysql_password = os.environ.get("MYSQL_PASSWORD", "")
+        mysql_database = os.environ.get("MYSQL_DATABASE", "doculogic")
+        
+        # 构建 MySQL URL
+        if mysql_password:
+            url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
+        else:
+            url = f"mysql+pymysql://{mysql_user}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
+        
+        print(f"📊 使用 MySQL 数据库: {mysql_host}:{mysql_port}/{mysql_database}")
+        return url
+    else:
+        # SQLite 配置（默认）
+        db_url = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE.resolve()}")
+        print(f"📊 使用 SQLite 数据库: {DEFAULT_SQLITE}")
+        return db_url
+
+
+# 获取数据库 URL
+DATABASE_URL = _build_database_url()
 
 # 创建数据库引擎
 if DATABASE_URL.startswith("sqlite"):
@@ -27,6 +64,14 @@ if DATABASE_URL.startswith("sqlite"):
         DATABASE_URL,
         connect_args={"check_same_thread": False},  # SQLite 需要此参数以支持多线程
         echo=False,  # 不打印 SQL 日志
+    )
+elif DATABASE_URL.startswith("mysql"):
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,  # 连接池大小
+        max_overflow=20,  # 最大溢出连接数
+        pool_recycle=3600,  # 连接回收时间（秒）
+        echo=False,
     )
 else:
     engine = create_engine(DATABASE_URL, echo=False)
@@ -168,13 +213,20 @@ def migrate_users_and_codes():
 
 def migrate_app_settings():
     """确保存在 id=1 的配置行（表由 SQLAlchemy create_all 创建）。"""
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect
 
     insp = inspect(engine)
     if not insp.has_table("app_settings"):
         return
+    
+    # 兼容 SQLite 和 MySQL
+    if DATABASE_URL.startswith("sqlite"):
+        sql = "INSERT OR IGNORE INTO app_settings (id) VALUES (1)"
+    else:
+        sql = "INSERT IGNORE INTO app_settings (id) VALUES (1)"
+    
     with engine.begin() as conn:
-        conn.execute(text("INSERT OR IGNORE INTO app_settings (id) VALUES (1)"))
+        conn.execute(text(sql))
 
 
 def migrate_app_settings_email():

@@ -1,4 +1,5 @@
 services:
+  # 主应用服务
   doculogic:
     build:
       context: ..
@@ -38,6 +39,12 @@ services:
       - DEBUG_MODE=${DEBUG_MODE:-0}
       # 邮件模拟模式
       - EMAIL_MOCK=${EMAIL_MOCK:-true}
+      
+      # ========== Redis 配置 ==========
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      # - REDIS_PASSWORD=  # 如果需要密码认证，取消注释并设置
     
     # GPU 支持
     deploy:
@@ -66,3 +73,48 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    
+    # 依赖 Redis 服务
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - doculogic-network
+
+  # Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: doculogic-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    
+    # 数据持久化
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/redis:/data
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    # 资源限制
+    mem_limit: 1g
+    cpus: 1.0
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    networks:
+      - doculogic-network
+
+# 网络配置
+networks:
+  doculogic-network:
+    driver: bridge

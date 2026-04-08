@@ -93,7 +93,7 @@ fi
 echo ""
 
 # 3. 配置环境变量
-echo "[3/6] 配置环境变量..."
+echo "[3/7] 配置环境变量..."
 if [ ! -f ".env" ]; then
     cp .env.example .env
     echo "✓ 已创建 .env 文件"
@@ -108,8 +108,53 @@ else
 fi
 echo ""
 
+# 3.5. 数据迁移（如果切换到 MySQL）
+echo "[3.5/7] 检查数据库迁移..."
+cd ..  # 回到项目根目录
+
+# 读取 DATABASE_TYPE
+DATABASE_TYPE=$(grep -E '^DATABASE_TYPE=' .env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
+
+if [ "$DATABASE_TYPE" = "mysql" ]; then
+    echo "ℹ️  检测到使用 MySQL 数据库"
+    
+    # 检查 SQLite 数据库是否存在
+    SQLITE_DB="web/data/app.db"
+    if [ -f "$SQLITE_DB" ]; then
+        echo "⚠️  发现 SQLite 数据库: $SQLITE_DB"
+        echo "   是否迁移数据到 MySQL？"
+        read -p "   执行迁移？[y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "🔄 开始迁移数据..."
+            
+            # 加载 .env 环境变量
+            set -a
+            source .env
+            set +a
+            
+            # 执行迁移脚本
+            if python3 migrate_sqlite_to_mysql.py; then
+                echo "✅ 数据迁移成功"
+            else
+                echo "⚠️  数据迁移失败，但将继续部署（MySQL 将使用空数据库）"
+            fi
+        else
+            echo "ℹ️  跳过迁移，MySQL 将从空数据库开始"
+        fi
+    else
+        echo "✓ 未发现 SQLite 数据库，MySQL 将从空数据库开始"
+    fi
+else
+    echo "✓ 使用 SQLite 数据库，无需迁移"
+fi
+
+cd docker  # 回到 docker 目录
+echo ""
+
 # 4. 停止旧服务（如果存在）
-echo "[4/6] 检查并停止旧服务..."
+echo "[4/7] 检查并停止旧服务..."
 cd docker
 if docker compose ps --services 2>/dev/null | grep -q .; then
     echo "⚠️  检测到正在运行的服务，正在停止..."
@@ -122,7 +167,7 @@ cd ..
 echo ""
 
 # 5. 构建镜像
-echo "[5/6] 构建 Docker 镜像..."
+echo "[5/7] 构建 Docker 镜像..."
 cd docker
 docker compose build
 cd ..
@@ -130,7 +175,7 @@ echo "✓ 镜像构建完成"
 echo ""
 
 # 6. 启动服务
-echo "[6/6] 启动服务..."
+echo "[6/7] 启动服务..."
 export DATA_DIR="${DATA_DIR}"
 export MODEL_DIR="${MODEL_DIR}"
 export HOST_PORT="${HOST_PORT}"

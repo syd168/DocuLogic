@@ -23,6 +23,12 @@ from ..auth_security import (
     verify_code_hash,
     verify_password,
 )
+from ..verification_cache import (
+    store_verification_code,
+    get_verification_code_hash,
+    delete_verification_code,
+    verify_verification_code,
+)
 from ..captcha import verify_captcha
 from ..database import get_db
 from ..deps import get_current_user
@@ -178,19 +184,25 @@ async def send_verification_code(request: Request, body: SendCodeBody, db: Sessi
             _log.exception("send verification email failed email=%s", email)
             raise HTTPException(status_code=502, detail="发送邮件失败") from None
 
-        expires = datetime.utcnow() + timedelta(minutes=CODE_EXPIRE_MINUTES)
-        db.query(VerificationCode).filter(
-            VerificationCode.email == email,
-            VerificationCode.purpose == "register",
-        ).delete()
-        row = VerificationCode(
-            email=email,
-            code_hash=hash_verification_code(email, code),
-            expires_at=expires,
-            purpose="register",
-        )
-        db.add(row)
-        db.commit()
+        # 尝试存储到 Redis，失败则降级到数据库
+        if not store_verification_code(email, code, "register"):
+            # 降级到数据库存储
+            expires = datetime.utcnow() + timedelta(minutes=CODE_EXPIRE_MINUTES)
+            db.query(VerificationCode).filter(
+                VerificationCode.email == email,
+                VerificationCode.purpose == "register",
+            ).delete()
+            row = VerificationCode(
+                email=email,
+                code_hash=hash_verification_code(email, code),
+                expires_at=expires,
+                purpose="register",
+            )
+            db.add(row)
+            db.commit()
+            _log.info(f"验证码已存储到数据库（Redis不可用）: {email}")
+        else:
+            _log.debug(f"验证码已存储到 Redis: {email}")
 
         cfg = get_effective_email_config(db)
         return {"ok": True, "message": "验证码已发送", "email_mock": cfg["mock"]}

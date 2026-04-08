@@ -114,6 +114,7 @@ def init_db():
     migrate_app_settings_auth_sms()
     migrate_app_settings_login_timeout()
     migrate_app_settings_password_rules()  # 密码规则配置
+    migrate_app_settings_max_upload_size()  # 文件上传大小限制
     migrate_app_settings_init_defaults()  # 初始化默认配置值
     _bootstrap_settings_and_admins()  # 引导初始数据
 
@@ -368,6 +369,20 @@ def migrate_app_settings_password_rules():
             conn.execute(text(s))
 
 
+def migrate_app_settings_max_upload_size():
+    """添加文件上传大小限制字段。"""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if not insp.has_table("app_settings"):
+        return
+    cols = {c["name"] for c in insp.get_columns("app_settings")}
+    if "max_upload_size_mb" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE app_settings ADD COLUMN max_upload_size_mb INTEGER DEFAULT 50"))
+
+
 def migrate_app_settings_init_defaults():
     """初始化 app_settings 的默认值（特别是登录/注册开关）。"""
     from sqlalchemy import inspect, text
@@ -410,7 +425,8 @@ def migrate_app_settings_init_defaults():
                 password_require_digit = 1,
                 password_require_special = 0,
                 login_timeout_minutes = 10,
-                stale_job_timeout_minutes = 60
+                stale_job_timeout_minutes = 60,
+                max_upload_size_mb = 50
             WHERE id = 1
             """
             conn.execute(text(update_sql))

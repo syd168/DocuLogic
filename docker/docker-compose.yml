@@ -17,6 +17,7 @@ services:
       - ${DATA_DIR:-~/doculogic/data}/output:/data/output
       - ${DATA_DIR:-~/doculogic/data}/logs:/app/logs
       - ${DATA_DIR:-~/doculogic/data}/database:/app/web/data
+      - ${DATA_DIR:-~/doculogic/data}/backups:/app/backups  # 数据库备份目录
       - ${MODEL_DIR:-~/doculogic/models}:/app/weights
     
     # 环境变量配置
@@ -54,6 +55,9 @@ services:
       - MYSQL_USER=${MYSQL_USER:-root}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-doculogic_secure_password}
       - MYSQL_DATABASE=${MYSQL_DATABASE:-doculogic}
+      - MYSQL_CHARSET=utf8mb4
+      # 数据备份时间
+      - RETENTION_DAYS=30  # 保留 30 天
     
     # GPU 支持
     deploy:

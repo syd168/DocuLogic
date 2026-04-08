@@ -19,6 +19,9 @@ from ..auth_security import (
     get_login_timeout_minutes,
     hash_password,
     hash_verification_code,
+    mask_email,
+    mask_phone,
+    mask_username,
     should_refresh_token,
     verify_code_hash,
     verify_password,
@@ -206,7 +209,7 @@ async def send_verification_code(request: Request, body: SendCodeBody, db: Sessi
             )
             db.add(row)
             db.commit()
-            _log.info(f"验证码已存储到数据库（Redis不可用）: {email}")
+            _log.info(f"验证码已存储到数据库（Redis不可用）: {mask_email(email)}")
         else:
             _log.debug(f"验证码已存储到 Redis: {email}")
 
@@ -369,7 +372,7 @@ async def register(request: Request, body: RegisterBody, db: Session = Depends(g
     # 检查单点登录（如果用户已在其他终端登录，旧 token 将被拉黑）
     old_session = check_single_login(user.id, token)
     if old_session:
-        _log.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
+        _log.info(f"用户 {mask_username(user.username)} 在新终端登录，旧会话已被替换")
     
     # 创建新的用户会话
     create_user_session(
@@ -447,7 +450,7 @@ async def login(request: Request, body: LoginBody, db: Session = Depends(get_db)
     # 检查单点登录（如果用户已在其他终端登录，旧 token 将被拉黑）
     old_session = check_single_login(user.id, token)
     if old_session:
-        _log.info(f"用户 {user.username} 在新终端登录，旧会话已被替换")
+        _log.info(f"用户 {mask_username(user.username)} 在新终端登录，旧会话已被替换")
     
     # 创建新的用户会话
     create_user_session(
@@ -716,6 +719,12 @@ async def forgot_reset(request: Request, body: ForgotResetBody, db: Session = De
             VerificationCode.purpose == "forgot",
         ).delete()
         db.commit()
+        
+        # 销毁该用户的所有活跃会话，强制重新登录
+        from ..session_manager import destroy_user_session
+        destroy_user_session(u.id, reason="password_reset")
+        _log.info(f"用户 {u.id} 密码已重置，所有会话已销毁")
+        
         return {"ok": True, "message": "密码已重置，请使用新密码登录"}
 
     if not bool(getattr(st, "forgot_phone_enabled", True)):
@@ -750,6 +759,12 @@ async def forgot_reset(request: Request, body: ForgotResetBody, db: Session = De
         VerificationCode.purpose == "forgot",
     ).delete()
     db.commit()
+    
+    # 销毁该用户的所有活跃会话，强制重新登录
+    from ..session_manager import destroy_user_session
+    destroy_user_session(u.id, reason="password_reset")
+    _log.info(f"用户 {u.id} (手机) 密码已重置，所有会话已销毁")
+    
     return {"ok": True, "message": "密码已重置，请使用新密码登录"}
 
 

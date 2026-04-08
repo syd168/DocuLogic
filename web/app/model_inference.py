@@ -641,7 +641,12 @@ class LogicsParsingModel:
                 input_path, output_dir, job_id, progress_callback, prompt, cancel_event, image_output_mode
             )
         except Exception as e:
-            error_msg = f"处理过程中发生错误: {str(e)}"
+            # 错误信息脱敏：记录详细日志，返回友好提示
+            import logging
+            logger = logging.getLogger("app")
+            logger.exception(f"文档处理失败: {input_path}")
+            
+            error_msg = "文档处理失败，请联系管理员"
             if progress_callback:
                 progress_callback(error_msg, -1)
             raise e

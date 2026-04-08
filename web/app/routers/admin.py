@@ -242,6 +242,19 @@ async def admin_put_settings(
     _: User = Depends(get_current_admin),
 ):
     data = body.model_dump(exclude_none=True)
+    
+    # 验证上传大小配置
+    if "max_upload_size_mb" in data:
+        from ..settings_service import validate_upload_size_config
+        validation = validate_upload_size_config(data["max_upload_size_mb"])
+        
+        # 如果后端配置超过 Nginx，拒绝保存
+        if not validation["valid"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=validation["warning"]
+            )
+    
     try:
         return update_settings_from_body(db, data)
     except ValueError as e:

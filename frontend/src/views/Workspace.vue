@@ -699,189 +699,310 @@
                         </div>
                       </el-collapse-item>
 
+                      <!-- 文件上传限制 -->
+                      <el-collapse-item name="upload" title="📤 文件上传限制">
+                        <div style="padding: 8px 0;">
+                          <el-form-item>
+                            <template #label>
+                              <span class="settings-label-with-tip">最大上传文件大小</span>
+                              <el-tooltip placement="top" :show-after="300" effect="dark">
+                                <template #content>
+                                  <div class="settings-tooltip-block">
+                                    用户上传文件的最大允许大小（单位：MB）。<br><br>
+                                    <strong>注意：</strong>此配置仅控制后端校验，如需完整生效，还需同步修改 Nginx 的 <code>client_max_body_size</code> 配置。<br><br>
+                                    建议：Nginx 限制略大于此值（如后端 50MB，Nginx 设 55MB）
+                                  </div>
+                                </template>
+                                <span class="settings-help-trigger" aria-label="说明">?</span>
+                              </el-tooltip>
+                            </template>
+                            <el-input-number 
+                              v-model="adminForm.max_upload_size_mb" 
+                              :min="1" 
+                              :max="500"
+                              :step="10"
+                              style="width: 200px"
+                            />
+                            <span style="margin-left: 10px; color: var(--text-muted);">MB（范围：1-500）</span>
+                          </el-form-item>
+
+                          <!-- 实时验证提示 -->
+                          <el-alert
+                            :title="'配置验证'"
+                            :type="uploadSizeValidation.type"
+                            :closable="false"
+                            style="margin-top: 12px;"
+                          >
+                            <template #default>
+                              <div v-html="uploadSizeValidation.message"></div>
+                              <div v-if="!uploadSizeValidation.valid" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
+                                <strong>当前 Nginx 配置：</strong>{{ nginxConfig.max_body_size_mb }} MB<br>
+                                <strong>推荐设置：</strong>
+                                <code style="background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 3px;">NGINX_MAX_BODY_SIZE={{ Math.ceil(adminForm.max_upload_size_mb * 1.1) }}m</code>
+                              </div>
+                            </template>
+                          </el-alert>
+
+                          <el-alert
+                            title="如何修改 Nginx 配置"
+                            type="info"
+                            :closable="false"
+                            style="margin-top: 12px;"
+                          >
+                            <template #default>
+                              <p style="margin: 4px 0;"><strong>Docker 环境：</strong></p>
+                              <ol style="margin: 8px 0; padding-left: 20px; line-height: 1.8;">
+                                <li>编辑 <code>.env</code> 文件，设置 <code>NGINX_MAX_BODY_SIZE=XXm</code></li>
+                                <li>执行 <code>cd docker && docker compose restart</code></li>
+                              </ol>
+                              <p style="margin: 8px 0 4px 0;"><strong>手动部署：</strong></p>
+                              <ol style="margin: 8px 0; padding-left: 20px; line-height: 1.8;">
+                                <li>编辑 Nginx 配置文件（通常在 <code>/etc/nginx/nginx.conf</code>）</li>
+                                <li>在 <code>server</code> 块中添加：<code>client_max_body_size XXm;</code></li>
+                                <li>执行 <code>nginx -s reload</code> 重载配置</li>
+                              </ol>
+                            </template>
+                          </el-alert>
+                        </div>
+                      </el-collapse-item>
+
                     </el-collapse>
                   </el-tab-pane>
 
                   <el-tab-pane label="路径与模型" name="paths">
-                    <el-form label-position="top" class="settings-panel-form settings-panel-form--paths">
-                      <el-form-item>
-                        <template #label>
-                          <span class="settings-label-row">
-                            解析输出目录
-                            <el-tooltip placement="top" :show-after="300" effect="dark">
-                              <template #content>
-                                <div class="settings-tooltip-block">
-                                  须为运行后端服务所在主机上的绝对路径。留空则使用环境变量 OUTPUT_DIR / PARSE_OUTPUT_DIR 或默认 out/。示例：Linux/macOS：
-                                  /var/logics/out；Windows：C:\Data\logics-out 或
-                                  C:/Data/logics-out。「选择文件夹」因浏览器限制通常无法自动填入服务器路径，请在资源管理器地址栏复制绝对路径后粘贴。
-                                </div>
-                              </template>
-                              <span class="settings-help-trigger" aria-label="说明">?</span>
-                            </el-tooltip>
-                          </span>
+                    <div class="path-model-container">
+                      <!-- 路径配置卡片 -->
+                      <el-card class="config-card" shadow="hover">
+                        <template #header>
+                          <div class="card-header">
+                            <span class="card-icon">📁</span>
+                            <span class="card-title">路径配置</span>
+                          </div>
                         </template>
-                        <el-input v-model="adminForm.output_dir" type="textarea" :rows="2" spellcheck="false"
-                          autocomplete="off" placeholder="例如 /var/logics/out 或 C:\Data\logics-out" />
-                        <div class="path-actions">
-                          <el-tooltip v-if="!dirPickerSupported" placement="top"
-                            content="当前浏览器不支持系统文件夹选择。请手动输入或从资源管理器复制路径。">
-                            <span class="path-btn-wrap">
-                              <el-button disabled>选择本地文件夹…</el-button>
-                            </span>
-                          </el-tooltip>
-                          <el-button v-else type="default" @click="pickOutputDir">选择本地文件夹…</el-button>
-                          <el-button type="default" @click="pasteOutputPathFromClipboard">从剪贴板粘贴</el-button>
+                        
+                        <!-- 解析输出目录 -->
+                        <div class="config-item">
+                          <div class="item-header">
+                            <label class="item-label">
+                              <span class="label-icon">📤</span>
+                              解析输出目录
+                              <el-tooltip placement="top" effect="dark" :show-after="200">
+                                <template #content>
+                                  <div class="tooltip-content">
+                                    <p><strong>作用：</strong>存储文档解析结果文件</p>
+                                    <p><strong>要求：</strong>必须是服务器上的绝对路径</p>
+                                    <p><strong>示例：</strong></p>
+                                    <ul>
+                                      <li>Linux: <code>/var/logics/out</code></li>
+                                      <li>Windows: <code>C:\Data\logics-out</code></li>
+                                    </ul>
+                                    <p style="margin-top: 8px; color: #e6a23c;">💡 留空则使用环境变量 OUTPUT_DIR</p>
+                                  </div>
+                                </template>
+                                <span class="settings-help-trigger" aria-label="说明">?</span>
+                              </el-tooltip>
+                            </label>
+                          </div>
+                          <el-input 
+                            v-model="adminForm.output_dir" 
+                            placeholder="留空使用默认路径"
+                            class="path-input"
+                            clearable
+                          />
                         </div>
-                        <p v-if="effectivePaths.output" class="form-hint muted">当前实际生效：{{ effectivePaths.output }}</p>
-                      </el-form-item>
-                      <el-form-item>
-                        <template #label>
-                          <span class="settings-label-row">
-                            模型本地目录
-                            <el-tooltip placement="top" :show-after="300" effect="dark">
+
+                        <el-divider />
+
+                        <!-- 模型本地目录 -->
+                        <div class="config-item">
+                          <div class="item-header">
+                            <label class="item-label">
+                              <span class="label-icon">🤖</span>
+                              模型目录
+                              <el-tooltip placement="top" effect="dark" :show-after="200">
                               <template #content>
-                                <div class="settings-tooltip-block">
-                                  <strong>支持两种路径格式：</strong><br><br>
-                                  <strong>1. 绝对路径</strong>（推荐）<br>
-                                  例如：<code>/home/user/models/Logics-Parsing-v2</code><br>
-                                  或 Windows：<code>D:\models\Logics-Parsing-v2</code><br><br>
-                                  <strong>2. 相对路径</strong><br>
-                                  相对于项目根目录下的 <code>logics-parsingv2/</code> 文件夹<br>
-                                  例如：<code>weights/Logics-Parsing-v2</code><br>
-                                  实际路径为：<code>./logics-parsingv2/weights/Logics-Parsing-v2</code><br><br>
-                                  💡 留空则使用环境变量 MODEL_PATH 或项目默认权重目录
+                                <div class="tooltip-content">
+                                  <p><strong>作用：</strong>指定 Qwen3-VL 模型文件的存储位置</p>
+                                  <p><strong>支持两种格式：</strong></p>
+                                  <ul>
+                                    <li><strong>绝对路径（推荐）：</strong><br><code>/home/user/models/Logics-Parsing-v2</code></li>
+                                    <li><strong>相对路径：</strong><br>相对于 <code>logics-parsingv2/</code> 文件夹<br>例如：<code>weights/Logics-Parsing-v2</code></li>
+                                  </ul>
+                                  <p style="margin-top: 8px; color: #409eff;">💡 留空则使用环境变量 MODEL_PATH</p>
                                 </div>
                               </template>
                               <span class="settings-help-trigger" aria-label="说明">?</span>
                             </el-tooltip>
-                          </span>
-                        </template>
-                        <el-input v-model="adminForm.model_local_path" type="textarea" :rows="2"
-                          placeholder="例如：weights/Logics-Parsing-v2 或 /absolute/path/to/model" />
-                        <p class="form-hint muted" style="margin-top: 4px; font-size: 12px;">
-                          💡 支持绝对路径（如 <code>/home/user/models</code>）或相对路径（相对于 <code>logics-parsingv2/</code> 文件夹）
-                        </p>
-                        <p v-if="effectivePaths.model" class="form-hint muted">当前实际生效：{{ effectivePaths.model }}</p>
-                      </el-form-item>
-                      <el-form-item>
-                        <template #label>
-                          <span class="settings-label-row">
-                            HuggingFace 仓库 ID
-                            <el-tooltip placement="top" :show-after="300" effect="dark">
-                              <template #content>
-                                <div class="settings-tooltip-block">后台「下载模型」选择 HuggingFace 时使用的默认仓库 ID。</div>
-                              </template>
-                              <span class="settings-help-trigger" aria-label="说明">?</span>
-                            </el-tooltip>
-                          </span>
-                        </template>
-                        <el-input v-model="adminForm.hf_repo_id" />
-                      </el-form-item>
-                      <el-form-item>
-                        <template #label>
-                          <span class="settings-label-row">
-                            ModelScope 仓库 ID
-                            <el-tooltip placement="top" :show-after="300" effect="dark">
-                              <template #content>
-                                <div class="settings-tooltip-block">后台「下载模型」选择 ModelScope 时使用的默认仓库 ID。</div>
-                              </template>
-                              <span class="settings-help-trigger" aria-label="说明">?</span>
-                            </el-tooltip>
-                          </span>
-                        </template>
-                        <el-input v-model="adminForm.ms_repo_id" />
-                      </el-form-item>
+                            </label>
 
-                      <el-divider content-position="left">模型下载与加载</el-divider>
-                      
-                      <!-- 模型状态提示 -->
-                      <el-alert 
-                        v-if="modelStatus.model_loaded" 
-                        title="✅ 模型已加载" 
-                        type="success" 
-                        :closable="false"
-                        style="margin-bottom: 12px"
-                      >
-                        <template #default>
-                          模型已就绪，可以开始解析文档
+                          </div>
+                          <el-input 
+                            v-model="adminForm.model_local_path" 
+                            placeholder="留空使用默认路径"
+                            class="path-input"
+                            clearable
+                          />
+                        </div>
+
+                        <el-divider />
+
+                        <!-- 仓库 ID 配置 -->
+                        <div class="repo-config-grid">
+                          <div class="repo-item">
+                            <label class="repo-label">
+                              <span class="label-icon">🌐</span>
+                              HuggingFace
+                                  <el-tooltip placement="top" effect="dark" :show-after="200">
+                              <template #content>
+                                <div class="tooltip-content">
+                                  <p>后台下载模型时使用的 HF 仓库地址</p>
+                                  <p style="margin-top: 4px;"><strong>默认：</strong><code>Qwen/Qwen3-VL-2B-Instruct</code></p>
+                                </div>
+                              </template>
+                              <span class="settings-help-trigger" aria-label="说明">?</span>
+                            </el-tooltip>
+                            </label>
+
+                            <el-input 
+                              v-model="adminForm.hf_repo_id" 
+                              placeholder="Qwen/Qwen3-VL-2B-Instruct"
+                              size="small"
+                              clearable
+                            />
+                          </div>
+
+                          <div class="repo-item">
+                            <label class="repo-label">
+                              <span class="label-icon">🇨🇳</span>
+                              ModelScope
+                                   <el-tooltip placement="top" effect="dark" :show-after="200">
+                              <template #content>
+                                <div class="tooltip-content">
+                                  <p>后台下载模型时使用的魔搭社区仓库地址</p>
+                                  <p style="margin-top: 4px;"><strong>默认：</strong><code>Qwen/Qwen3-VL-2B-Instruct</code></p>
+                                </div>
+                              </template>
+                              <span class="settings-help-trigger" aria-label="说明">?</span>
+                            </el-tooltip>
+                            </label>
+
+                            <el-input 
+                              v-model="adminForm.ms_repo_id" 
+                              placeholder="Qwen/Qwen3-VL-2B-Instruct"
+                              size="small"
+                              clearable
+                            />
+                          </div>
+                        </div>
+                      </el-card>
+
+                      <!-- 模型管理卡片 -->
+                      <el-card class="config-card model-management-card" shadow="hover">
+                        <template #header>
+                          <div class="card-header">
+                            <span class="card-icon">⚙️</span>
+                            <span class="card-title">模型管理</span>
+                          </div>
                         </template>
-                      </el-alert>
-                      <el-alert 
-                        v-else-if="!modelStatus.model_loaded && !modelStatus.downloading && !modelStatus.download_message" 
-                        title="⚠️ 模型未加载" 
-                        type="warning" 
-                        :closable="false"
-                        style="margin-bottom: 12px"
-                      >
-                        <template #default>
-                          请下载模型后点击「重新加载模型」
-                        </template>
-                      </el-alert>
-                      
-                      <p class="settings-inline-hint muted">
-                        与项目 download_model_v2 一致
-                        <el-tooltip placement="top" :show-after="300" effect="dark">
-                          <template #content>
-                            <div class="settings-tooltip-block">从所选源下载权重到上方「模型本地目录」；完成后可点「重新加载模型」。</div>
-                          </template>
-                          <span class="settings-help-trigger" aria-label="说明">?</span>
-                        </el-tooltip>
-                      </p>
-                      <el-radio-group v-model="dlSource" class="settings-dl-source" :disabled="modelStatus.downloading">
-                        <el-radio-button value="modelscope">ModelScope</el-radio-button>
-                        <el-radio-button value="huggingface">HuggingFace</el-radio-button>
-                      </el-radio-group>
-                      <div class="btn-row btn-row-split">
-                        <el-button 
-                          :loading="dlLoading || modelStatus.downloading" 
-                          :disabled="modelStatus.downloading"
-                          @click="runModelDownload"
+
+                        <!-- 模型状态 -->
+                        <el-alert 
+                          v-if="modelStatus.model_loaded" 
+                          title="✅ 模型已加载" 
+                          type="success" 
+                          :closable="false"
+                          class="model-status-alert"
                         >
-                          {{ modelStatus.downloading ? '下载中...' : '后台下载到模型目录' }}
-                        </el-button>
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <template #default>
+                            <span>模型已就绪，可以开始解析文档</span>
+                          </template>
+                        </el-alert>
+                        <el-alert 
+                          v-else-if="!modelStatus.downloading && !modelStatus.download_message" 
+                          title="⚠️ 模型未加载" 
+                          type="warning" 
+                          :closable="false"
+                          class="model-status-alert"
+                        >
+                          <template #default>
+                            <span>请下载模型后点击「重新加载模型」</span>
+                          </template>
+                        </el-alert>
+
+                        <!-- 下载源选择 -->
+                        <div class="download-source-section">
+                          <label class="section-label">
+                            <span class="label-icon">📥</span>
+                            下载源选择
+                            <el-tooltip placement="top" effect="dark" :show-after="200">
+                              <template #content>
+                                <div class="tooltip-content">
+                                  <p><strong>ModelScope（推荐）：</strong>国内访问速度快</p>
+                                  <p><strong>HuggingFace：</strong>国际通用源</p>
+                                </div>
+                              </template>
+                              <span class="settings-help-trigger" aria-label="说明">?</span>
+                            </el-tooltip>
+                          </label>
+                          <el-radio-group v-model="dlSource" :disabled="modelStatus.downloading" class="source-radio-group">
+                            <el-radio-button value="modelscope">🇨🇳 ModelScope</el-radio-button>
+                            <el-radio-button value="huggingface">🌐 HuggingFace</el-radio-button>
+                          </el-radio-group>
+                        </div>
+
+                        <!-- 操作按钮 -->
+                        <div class="action-buttons">
                           <el-button 
-                            type="primary" 
+                            :loading="dlLoading || modelStatus.downloading" 
+                            :disabled="modelStatus.downloading"
+                            @click="runModelDownload"
+                            class="download-btn"
+                          >
+                            <span v-if="!modelStatus.downloading">📥 后台下载模型</span>
+                            <span v-else>⏳ 下载中...</span>
+                          </el-button>
+                          <el-button 
                             :loading="reloadLoading" 
                             :disabled="modelStatus.downloading"
                             @click="reloadModel"
+                            class="reload-btn"
                           >
-                            重新加载模型
+                            🔄 重新加载模型
                           </el-button>
-                          <span v-if="reloadError" class="reload-error-text">{{ reloadError }}</span>
                         </div>
-                      </div>
-                      
-                      <!-- 下载日志区域 -->
-                      <div v-if="modelStatus.download_message" class="download-log-section">
-                        <div class="log-header">
-                          <span class="log-title">📋 下载日志</span>
-                          <el-tag 
-                            :type="modelStatus.downloading ? 'warning' : (modelStatus.download_success ? 'success' : 'danger')" 
-                            size="small"
-                          >
-                            {{ modelStatus.downloading ? '进行中' : (modelStatus.download_success ? '已完成' : '失败') }}
-                          </el-tag>
-                        </div>
-                        <div class="log-content">
-                          <pre class="log-text">{{ modelStatus.download_message }}</pre>
-                        </div>
-                        <div v-if="modelStatus.downloading && modelStatus.download_dest" class="log-footer">
-                          <div class="status-row">
-                            <span class="status-label">来源：</span>
-                            <span class="status-value">{{ modelStatus.download_source || '-' }}</span>
+                        <span v-if="reloadError" class="reload-error-text">{{ reloadError }}</span>
+
+                        <!-- 下载日志 -->
+                        <div v-if="modelStatus.download_message" class="download-log-section">
+                          <div class="log-header">
+                            <span class="log-title">📋 下载日志</span>
+                            <el-tag 
+                              :type="modelStatus.downloading ? 'warning' : (modelStatus.download_success ? 'success' : 'danger')" 
+                              size="small"
+                            >
+                              {{ modelStatus.downloading ? '进行中' : (modelStatus.download_success ? '已完成' : '失败') }}
+                            </el-tag>
                           </div>
-                          <div class="status-row">
-                            <span class="status-label">仓库：</span>
-                            <span class="status-value">{{ modelStatus.download_repo || '-' }}</span>
+                          <div class="log-content">
+                            <pre class="log-text">{{ modelStatus.download_message }}</pre>
                           </div>
-                          <div class="status-row">
-                            <span class="status-label">目标：</span>
-                            <span class="status-value status-path">{{ modelStatus.download_dest }}</span>
+                          <div v-if="modelStatus.downloading && modelStatus.download_dest" class="log-footer">
+                            <div class="status-row">
+                              <span class="status-label">来源：</span>
+                              <span class="status-value">{{ modelStatus.download_source || '-' }}</span>
+                            </div>
+                            <div class="status-row">
+                              <span class="status-label">仓库：</span>
+                              <span class="status-value">{{ modelStatus.download_repo || '-' }}</span>
+                            </div>
+                            <div class="status-row">
+                              <span class="status-label">目标：</span>
+                              <span class="status-value status-path">{{ modelStatus.download_dest }}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </el-form>
+                      </el-card>
+                    </div>
                   </el-tab-pane>
 
                   <el-tab-pane label="邮件 SMTP" name="email">
@@ -2045,6 +2166,10 @@ const effectivePaths = reactive({
   output: '',
   model: '',
 })
+// Nginx 配置信息（只读）
+const nginxConfig = reactive({
+  max_body_size_mb: 55,
+})
 const isAdmin = ref(false)
 const adminSaveLoading = ref(false)
 /** 系统设置分栏：security | paths | email | sms */
@@ -2107,6 +2232,8 @@ const adminForm = reactive({
   password_require_lowercase: true,
   password_require_digit: true,
   password_require_special: false,
+  // 文件上传限制
+  max_upload_size_mb: 50,
 })
 
 /** Chromium 等支持 File System Access API；Firefox/Safari 通常无 showDirectoryPicker */
@@ -2236,6 +2363,40 @@ const menuTitle = computed(() => {
     users: '用户管理',
   }
   return map[activeMenu.value] || ''
+})
+
+// 文件上传配置验证
+const uploadSizeValidation = computed(() => {
+  const backend = adminForm.max_upload_size_mb
+  const nginx = nginxConfig.max_body_size_mb
+  
+  if (backend > nginx) {
+    return {
+      valid: false,
+      type: 'error',
+      message: `⚠️ 后端配置 (${backend}MB) 超过 Nginx 限制 (${nginx}MB)<br>用户将无法上传 ${nginx}-${backend}MB 之间的文件<br>建议将 NGINX_MAX_BODY_SIZE 设置为 ${Math.ceil(backend * 1.1)}m`,
+    }
+  } else if (backend === nginx) {
+    return {
+      valid: true,
+      type: 'warning',
+      message: `💡 提示：后端与 Nginx 配置相同 (${backend}MB)<br>建议 Nginx 略大于后端（如 ${Math.ceil(backend * 1.1)}m），以留有余量`,
+    }
+  } else if (nginx < backend * 1.05) {
+    const recommended = Math.ceil(backend * 1.1)
+    const margin = Math.round((recommended / backend - 1) * 100)
+    return {
+      valid: true,
+      type: 'info',
+      message: `💡 提示：Nginx 余量较小 (${nginx}MB vs ${backend}MB)<br>建议设置为 ${recommended}m（${margin}% 余量）`,
+    }
+  }
+  
+  return {
+    valid: true,
+    type: 'success',
+    message: `✅ 配置合理（后端 ${backend}MB < Nginx ${nginx}MB）`,
+  }
 })
 
 const resultLinks = computed(() => {
@@ -2489,6 +2650,10 @@ async function loadSettings() {
       adminForm.password_require_lowercase = a.password_require_lowercase !== false
       adminForm.password_require_digit = a.password_require_digit !== false
       adminForm.password_require_special = !!a.password_require_special
+      // 文件上传限制
+      adminForm.max_upload_size_mb = a.max_upload_size_mb ?? 50
+      // Nginx 配置信息（只读）
+      nginxConfig.max_body_size_mb = a.nginx_max_body_size_mb ?? 55
       effectivePaths.output = a.effective_output_dir || ''
       effectivePaths.model = a.effective_model_path || ''
     }
@@ -5152,6 +5317,372 @@ async function stopJob() {
 
 .settings-panel-form--paths :deep(.el-select) {
   width: 100%;
+}
+
+/* ===== 路径与模型 - 卡片式布局 ===== */
+.path-model-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.config-card {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+}
+
+.config-card:hover {
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.1);
+  border-color: var(--accent);
+}
+
+.config-card :deep(.el-card__header) {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.05));
+  border-bottom: 1px solid var(--border);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-icon {
+  font-size: 20px;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.config-item {
+  margin-bottom: 20px;
+}
+
+.config-item:last-child {
+  margin-bottom: 0;
+}
+
+.item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.label-icon {
+  font-size: 16px;
+}
+
+.help-btn {
+  padding: 0;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.help-btn:hover {
+  opacity: 1;
+}
+
+.path-input :deep(.el-input__wrapper) {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.path-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.effective-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(16, 185, 129, 0.05);
+  border-left: 3px solid #10b981;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.path-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.effective-path code {
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.repo-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.repo-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.repo-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* 模型管理卡片 */
+.model-management-card {
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.model-status-alert {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.download-source-section {
+  margin-bottom: 16px;
+}
+
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.source-radio-group {
+  display: flex;
+  width: 100%;
+}
+
+/* 确保单选按钮组与标签左对齐 */
+.source-radio-group :deep(.el-radio-button) {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+}
+
+.source-radio-group :deep(.el-radio-button:first-child) {
+  margin-left: 0;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* 确保操作按钮与上方元素左对齐 */
+.action-buttons :deep(.el-button) {
+  margin: 0;
+}
+
+.download-btn,
+.reload-btn {
+  flex: 1;
+  min-width: 160px;
+  transition: all 0.3s ease;
+}
+
+.download-btn:hover,
+.reload-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.reload-error-text {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #ef4444;
+}
+
+.download-log-section {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--border);
+}
+
+.log-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.log-content {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #1e1e1e;
+}
+
+.log-text {
+  margin: 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-footer {
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid var(--border);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.status-row:last-child {
+  margin-bottom: 0;
+}
+
+.status-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 50px;
+}
+
+.status-value {
+  color: var(--text);
+  word-break: break-all;
+}
+
+.status-path {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+}
+
+/* Tooltip 样式优化 */
+.tooltip-content {
+  max-width: 360px;
+  line-height: 1.6;
+}
+
+.tooltip-content p {
+  margin: 6px 0;
+}
+
+.tooltip-content ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.tooltip-content li {
+  margin: 4px 0;
+}
+
+.tooltip-content code {
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+/* Tooltip 问号按钮 - 内联样式 */
+.help-btn-inline {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0;
+  min-height: auto;
+  vertical-align: middle;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.help-btn-inline :deep(.el-button) {
+  padding: 0;
+  min-height: auto;
+}
+
+/* 下载源单选按钮颜色优化 */
+.source-radio-group :deep(.el-radio-button__inner) {
+  color: #374151 !important;
+  background: #f9fafb !important;
+  border-color: #d1d5db !important;
+  font-weight: 500;
+}
+
+.source-radio-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .repo-config-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .download-btn,
+  .reload-btn {
+    width: 100%;
+  }
 }
 
 .path-actions {

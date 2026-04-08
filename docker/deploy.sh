@@ -102,9 +102,26 @@ if [ ! -f ".env" ]; then
     if command -v python3 &> /dev/null; then
         JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
         sed -i "s/JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
+        echo "✓ 已生成随机 JWT_SECRET"
     fi
 else
     echo "✓ .env 文件已存在"
+    
+    # 检查 JWT_SECRET 是否仍为默认值
+    CURRENT_JWT=$(grep -E '^JWT_SECRET=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
+    if [ "$CURRENT_JWT" = "change-me-in-production" ] || [ -z "$CURRENT_JWT" ]; then
+        echo "⚠️  检测到 JWT_SECRET 为默认值或空，正在生成随机密钥..."
+        if command -v python3 &> /dev/null; then
+            JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+            sed -i "s/JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
+            echo "✓ 已生成新的随机 JWT_SECRET"
+        else
+            echo "❌ 无法生成随机密钥（需要 Python 3）"
+            echo "   请手动修改 .env 文件中的 JWT_SECRET"
+        fi
+    else
+        echo "✓ JWT_SECRET 已配置"
+    fi
 fi
 echo ""
 

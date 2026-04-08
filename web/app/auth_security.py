@@ -22,6 +22,18 @@ JWT_ALGORITHM = "HS256"  # JWT 签名算法
 # 默认 7 天，但实际使用时会从数据库读取动态配置
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.environ.get("ACCESS_TOKEN_EXPIRE_DAYS", "7"))
 
+# 安全检查：防止使用默认密钥
+if JWT_SECRET == "change-me-use-openssl-rand-hex-32":
+    import warnings
+    warnings.warn(
+        "⚠️  警告：检测到使用默认 JWT_SECRET！\n"
+        "   生产环境必须修改 .env 文件中的 JWT_SECRET 为强随机值。\n"
+        "   建议执行：python3 -c \"import secrets; print(secrets.token_hex(32))\"\n"
+        "   当前服务仍可启动，但存在严重安全风险！",
+        RuntimeWarning,
+        stacklevel=2
+    )
+
 # 验证码配置
 CODE_EXPIRE_MINUTES = int(os.environ.get("CODE_EXPIRE_MINUTES", "10"))  # 验证码有效期（分钟）
 CODE_PEPPER = os.environ.get("CODE_PEPPER", JWT_SECRET + "_email_code")  # 验证码加盐
@@ -180,3 +192,62 @@ def verify_code_hash(email: str, code: str, code_hash: str) -> bool:
         hash_verification_code(email, code),
         code_hash,
     )
+
+
+def mask_email(email: str) -> str:
+    """
+    脱敏邮箱地址
+    
+    Args:
+        email: 完整邮箱地址
+        
+    Returns:
+        脱敏后的邮箱，如：us***@example.com
+    """
+    if not email or "@" not in email:
+        return "***"
+    parts = email.split("@")
+    username = parts[0]
+    domain = parts[1]
+    
+    # 保留前2个字符和最后一个字符
+    if len(username) <= 3:
+        masked_username = "*" * len(username)
+    else:
+        masked_username = username[:2] + "*" * (len(username) - 3) + username[-1]
+    
+    return f"{masked_username}@{domain}"
+
+
+def mask_phone(phone: str) -> str:
+    """
+    脱敏手机号
+    
+    Args:
+        phone: 完整手机号
+        
+    Returns:
+        脱敏后的手机号，如：138****5678
+    """
+    if not phone or len(phone) < 7:
+        return "***"
+    
+    # 保留前3位和后4位
+    return phone[:3] + "****" + phone[-4:]
+
+
+def mask_username(username: str) -> str:
+    """
+    脱敏用户名
+    
+    Args:
+        username: 用户名
+        
+    Returns:
+        脱敏后的用户名，如：us***
+    """
+    if not username or len(username) <= 2:
+        return "***"
+    
+    # 保留前2个字符
+    return username[:2] + "*" * (len(username) - 2)

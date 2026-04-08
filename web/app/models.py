@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -55,6 +55,9 @@ class VerificationCode(Base):
     验证码经过哈希处理，不直接存储明文。
     """
     __tablename__ = "verification_codes"
+    __table_args__ = (
+        UniqueConstraint('email', 'purpose', name='uq_email_purpose'),  # 防止重复验证码
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), index=True)  # 邮箱或手机号（合成键）
@@ -153,3 +156,6 @@ class AppSettings(Base):
     password_require_lowercase: Mapped[bool] = mapped_column(Boolean, default=True)  # 要求小写字母
     password_require_digit: Mapped[bool] = mapped_column(Boolean, default=True)  # 要求数字
     password_require_special: Mapped[bool] = mapped_column(Boolean, default=False)  # 要求特殊字符
+    
+    # 文件上传限制（MB）
+    max_upload_size_mb: Mapped[int] = mapped_column(Integer, default=50)  # 最大上传文件大小（MB）

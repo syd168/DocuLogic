@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.websockets import WebSocketDisconnect
 
 from .auth_security import decode_token
@@ -38,6 +39,7 @@ from .settings_service import (
     get_effective_model_path_str,
     get_effective_pdf_max_pages_for_user,
     get_pdf_max_pages,
+    get_max_upload_size_mb,
     resolve_job_pdf_max_pages,
     settings_to_admin_dict,
     settings_to_public_dict,
@@ -50,6 +52,71 @@ STATIC_DIR = CURRENT_DIR.parent / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="DocuLogic Platform", docs_url="/api/docs", redoc_url=None)
+
+# 安全响应头中间件
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    添加安全响应头，增强 Web 应用安全性
+    
+    包括：
+    - X-Content-Type-Options: 防止 MIME 类型嗅探
+    - X-Frame-Options: 防止点击劫持
+    - X-XSS-Protection: XSS 过滤器
+    - Strict-Transport-Security: 强制 HTTPS（生产环境）
+    - Content-Security-Policy: 内容安全策略
+    - Referrer-Policy: 控制 Referer 信息
+    - Permissions-Policy: 限制浏览器功能
+    """
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # 防止 MIME 类型嗅探
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        
+        # 防止点击劫持（禁止嵌入 iframe）
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # XSS 过滤器（现代浏览器已内置，但保留作为后备）
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        
+        # 强制 HTTPS（仅在生产环境且使用 HTTPS 时启用）
+        if os.environ.get("HTTPS_ENABLED", "").lower() in ("1", "true", "yes"):
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+            )
+        
+        # 内容安全策略（CSP）
+        # 允许同源资源、必要的 CDN、内联样式（Vue 需要）
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' ws: wss:; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
+        )
+        
+        # 控制 Referer 信息泄露
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # 限制浏览器功能（禁用不必要的 API）
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), "
+            "microphone=(), "
+            "camera=(), "
+            "payment=(), "
+            "usb=(), "
+            "magnetometer=(), "
+            "gyroscope=(), "
+            "accelerometer=()"
+        )
+        
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -64,8 +131,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _cors.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # 仅允许必要的方法
+    allow_headers=["Content-Type", "Authorization", "Accept"],  # 最小化允许的头部
 )
 
 app.include_router(auth_router.router)
@@ -197,6 +264,9 @@ async def startup_event():
         
         # 检测并恢复僵尸任务（启动时自动执行一次）
         _recover_stale_jobs(db)
+        
+        # 清理过期的验证码
+        _cleanup_expired_codes(db)
     finally:
         db.close()
 
@@ -260,22 +330,29 @@ def _recover_stale_jobs(db: Session, max_stale_minutes: Optional[int] = None) ->
             # 任务仍在运行，跳过
             continue
         
-        # 任务是僵尸任务，标记为 failed
-        print(f"[僵尸任务恢复] 检测到僵尸任务: {job_id}, 创建时间: {job.created_at}")
+        # 使用乐观锁：仅当状态仍为 processing 时才更新
+        # 避免竞态条件：任务可能在检查和更新之间完成
+        updated = db.query(ParseJob).filter(
+            ParseJob.job_id == job_id,
+            ParseJob.status == "processing"  # 乐观锁条件
+        ).update({
+            "status": "failed",
+            "completed_at": now
+        })
         
-        job.status = "failed"
-        job.completed_at = now
-        
-        # 清理输出目录（如果存在）
-        job_dir = out_base / job_id
-        if job_dir.exists():
-            try:
-                shutil.rmtree(job_dir, ignore_errors=True)
-                print(f"[僵尸任务恢复] 已清理目录: {job_dir}")
-            except Exception as e:
-                print(f"[僵尸任务恢复] 清理目录失败: {e}")
-        
-        recovered_count += 1
+        if updated:
+            # 任务是僵尸任务，清理输出目录
+            print(f"[僵尸任务恢复] 检测到僵尸任务: {job_id}, 创建时间: {job.created_at}")
+            
+            job_dir = out_base / job_id
+            if job_dir.exists():
+                try:
+                    shutil.rmtree(job_dir, ignore_errors=True)
+                    print(f"[僵尸任务恢复] 已清理目录: {job_dir}")
+                except Exception as e:
+                    print(f"[僵尸任务恢复] 清理目录失败: {e}")
+            
+            recovered_count += 1
     
     if recovered_count > 0:
         db.commit()
@@ -284,6 +361,31 @@ def _recover_stale_jobs(db: Session, max_stale_minutes: Optional[int] = None) ->
         )
     
     return recovered_count
+
+
+def _cleanup_expired_codes(db: Session) -> int:
+    """
+    清理过期的验证码。
+    
+    防止数据库中积累大量过期验证码，降低存储压力和潜在的安全风险。
+    
+    参数：
+        db: 数据库会话
+    
+    返回：清理的验证码数量
+    """
+    from .models import VerificationCode
+    
+    now = datetime.utcnow()
+    deleted_count = db.query(VerificationCode).filter(
+        VerificationCode.expires_at < now
+    ).delete()
+    
+    if deleted_count > 0:
+        db.commit()
+        logging.getLogger("app").info(f"启动时清理 {deleted_count} 个过期验证码")
+    
+    return deleted_count
 
 
 @app.get("/")
@@ -330,6 +432,16 @@ async def upload_document(
             detail=f"Unsupported file type. Allowed: {', '.join(sorted(allowed_extensions))}",
         )
 
+    # 从系统设置获取文件大小限制
+    max_upload_size_mb = get_max_upload_size_mb(db)
+    MAX_FILE_SIZE = max_upload_size_mb * 1024 * 1024
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件过大，最大支持 {max_upload_size_mb}MB"
+        )
+
     actor = db.query(User).filter(User.id == current_user.id).first()
     if not actor:
         raise HTTPException(status_code=401, detail="用户不存在")
@@ -348,7 +460,6 @@ async def upload_document(
     input_file_path = input_dir / f"input{file_extension}"
 
     with open(input_file_path, "wb") as buffer:
-        content = await file.read()
         buffer.write(content)
 
     cancel_ev = register_job(job_id)
@@ -420,7 +531,7 @@ async def process_document_task(
             image_output_mode = getattr(settings_row, "image_output_mode", "base64") if settings_row else "base64"
         
         if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
-            print(f"[调试] 任务 {job_id}: 用户ID={user_id}, 图片输出模式={image_output_mode}")
+            print(f"[调试] 任务 {job_id}: 图片输出模式={image_output_mode}")  # 移除用户ID，保护隐私
         
         try:
             result = await asyncio.to_thread(
@@ -455,7 +566,12 @@ async def process_document_task(
                         pass
                 db.commit()
         except Exception as e:
-            error_msg = f"Processing failed: {str(e)}"
+            # 错误信息脱敏：仅记录详细日志，不暴露给用户
+            import logging
+            logger = logging.getLogger("app")
+            logger.exception(f"任务 {job_id} 处理失败")  # 详细错误仅服务端日志
+            
+            error_msg = "文档处理失败，请联系管理员"  # 用户友好提示
             if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
                 print(error_msg)
             
@@ -535,6 +651,18 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
         except (TypeError, ValueError):
             await websocket.close(code=4401)
             return
+        
+        # 检查 Token 是否在黑名单中
+        from .session_manager import is_token_blacklisted, validate_token_with_session
+        if is_token_blacklisted(token):
+            await websocket.close(code=4401)
+            return
+        
+        # 验证 Token 是否与会话匹配（单点登录检查）
+        if not validate_token_with_session(token, uid):
+            await websocket.close(code=4401)
+            return
+        
         user = db.query(User).filter(User.id == uid, User.is_active.is_(True)).first()
         if not user:
             await websocket.close(code=4401)
@@ -615,8 +743,10 @@ async def list_jobs(
         except ValueError:
             pass
     if filename and filename.strip():
-        fn = f"%{filename.strip()}%"
-        q = q.filter(ParseJob.original_filename.ilike(fn))
+        # 转义 SQL LIKE 特殊字符，防止通配符注入
+        escaped = filename.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        fn = f"%{escaped}%"
+        q = q.filter(ParseJob.original_filename.ilike(fn, escape="\\"))
 
     total = q.count()
     rows = (
@@ -867,11 +997,17 @@ async def download_asset_image(
         raise HTTPException(status_code=404, detail="Job not found")
     
     # 安全检查：防止路径遍历攻击
-    if ".." in image_filename or "/" in image_filename or "\\" in image_filename:
+    import os
+    safe_filename = os.path.basename(image_filename)  # 仅保留文件名，去除路径
+    if not safe_filename or safe_filename != image_filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
     
     assets_dir = job_dir / "assets"
-    file_path = assets_dir / image_filename
+    file_path = (assets_dir / safe_filename).resolve()  # 解析绝对路径
+    
+    # 确保文件在允许的目录内
+    if not str(file_path).startswith(str(assets_dir.resolve())):
+        raise HTTPException(status_code=403, detail="非法访问")
     
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Image not found")
@@ -888,7 +1024,7 @@ async def download_asset_image(
     }
     media_type = mime_types.get(ext, "application/octet-stream")
     
-    return FileResponse(path=file_path, filename=image_filename, media_type=media_type)
+    return FileResponse(path=file_path, filename=safe_filename, media_type=media_type)
 
 
 @app.get("/download/{job_id}/{file_type}")

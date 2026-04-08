@@ -38,7 +38,7 @@
       <div class="features">
         <div class="feature">
           <h3>🧠 Qwen3-VL 多模态理解</h3>
-          <p>基于最新的 Qwen3-VL 大模型，精准识别文本、表格、LaTeX 公式、Mermaid 流程图、ABC 记谱法、化学式等复杂元素，输出高质量结构化 Markdown。</p>
+          <p>基于最新的 Qwen3-VL 大模型，精准识别文本、表格、LaTeX 公式、Mermaid 流程图、ABC 记谱法、化学式（SMILES）、手写文本等复杂元素，支持 STEM 专业内容与复杂版面处理。</p>
         </div>
         <div class="feature">
           <h3>✂️ 智能图像裁剪</h3>
@@ -46,7 +46,7 @@
         </div>
         <div class="feature">
           <h3>🎨 三种输出模式</h3>
-          <p><strong>Base64 嵌入</strong>：单文件便携分享；<strong>独立文件（Separate）</strong>：图片单独保存至 assets/，Markdown 引用相对路径；<strong>不输出</strong>：仅保留文本内容。</p>
+          <p><strong>Base64 嵌入</strong>：单文件便携分享；<strong>独立文件（Separate）</strong>：图片单独保存至 assets/，Markdown 引用相对路径；<strong>不输出</strong>：仅保留文本内容。管理员可配置全局默认值，用户也可设置个人偏好。</p>
         </div>
         <div class="feature">
           <h3>📦 ZIP 打包与批量下载</h3>
@@ -57,8 +57,8 @@
           <p>WebSocket 实时推送解析进度（每页更新），支持中途停止任务；PDF 按页处理，即使中断也会保存已生成的部分结果，避免资源浪费。</p>
         </div>
         <div class="feature">
-          <h3>🔐 企业级权限与配置</h3>
-          <p>管理员可配置全局策略（注册开关、验证码、PDF 页数上限、图片输出模式、僵尸任务超时）；普通用户可设置个人偏好；账号数据完全隔离，支持邮箱/手机双通道注册。</p>
+          <h3>🔐 企业级权限与安全</h3>
+          <p>JWT Token 认证、bcrypt 密码哈希、图形验证码、速率限制防护；管理员可配置注册策略、PDF 页数上限、僵尸任务超时等；普通用户可设置个人偏好；账号数据完全隔离，支持邮箱/手机双通道注册。</p>
         </div>
       </div>
     </section>
@@ -69,15 +69,15 @@
       <div class="features">
         <div class="feature">
           <h3>🚀 高性能推理引擎</h3>
-          <p>基于 PyTorch + Transformers，支持 CUDA BF16 加速与 SDPA 注意力优化；单图异步推理，PDF 逐页串行处理，最大化 GPU 利用率；支持动态分辨率调整。</p>
+          <p>基于 PyTorch + Transformers，支持 CUDA BF16 加速与 SDPA 注意力优化；单图异步推理，PDF 逐页串行处理，最大化 GPU 利用率；支持动态分辨率调整，OmniDocBench 总体得分 93.23。</p>
         </div>
         <div class="feature">
           <h3>🌐 FastAPI + Vue 3 前后端分离</h3>
           <p>前端 Vue 3 Composition API + Element Plus + Vite；后端 FastAPI + SQLAlchemy 2.0；REST API + WebSocket 双通道通信，实时推送进度与状态。</p>
         </div>
         <div class="feature">
-          <h3>🗄️ SQLite 数据持久化</h3>
-          <p>SQLite 存储用户信息、解析任务、验证码与系统配置；文件输出目录可配置（默认 out/），支持挂载到网络存储或对象存储；软删除机制保留审计记录。</p>
+          <h3>🗄️ MySQL/SQLite 灵活切换</h3>
+          <p>支持 SQLite（开发环境）和 MySQL（生产环境）无缝切换；Docker Compose 一键部署包含 Redis 缓存；文件输出目录可配置，支持挂载到网络存储或对象存储。</p>
         </div>
         <div class="feature">
           <h3>🔒 多层安全防护</h3>
@@ -116,7 +116,7 @@
         </div>
         <div class="feature">
           <h3>🔬 STEM 科研数据处理</h3>
-          <p>实验报告、研究数据、科学图表的自动化解析与结构化；特别支持化学式、数学公式、乐谱等专业领域符号的精准识别。</p>
+          <p>实验报告、研究数据、科学图表的自动化解析与结构化；特别支持化学式（SMILES）、数学公式、物理图表、生物图谱、乐谱等专业领域符号的精准识别。</p>
         </div>
         <div class="feature">
           <h3>📰 媒体内容管理与发布</h3>
@@ -129,16 +129,16 @@
       <h2 class="landing-title">支持的文档类型</h2>
       <div class="landing-detail">
         <p>
-          <strong>图像格式：</strong>PNG、JPG/JPEG、WebP 等常见图片格式，支持扫描件、截图、照片等多种来源。
+          <strong>图像格式：</strong>PNG、JPG/JPEG、WebP、BMP、TIFF 等常见图片格式，支持扫描件、截图、照片等多种来源。
         </p>
         <p>
           <strong>PDF 文档：</strong>支持单页或多页 PDF，自动分页渲染为 PNG 后逐页处理；管理员可配置最大页数限制（默认 80 页），防止资源滥用。
         </p>
         <p>
-          <strong>复杂版面：</strong>能够处理图文混排、多栏布局、表格嵌套、LaTeX 公式、Mermaid 流程图、ABC 记谱法、化学式等复杂结构，保持原文档的逻辑层次。
+          <strong>复杂版面：</strong>能够处理图文混排、多栏布局、表格嵌套、LaTeX 公式、Mermaid 流程图、ABC 记谱法、化学式（SMILES）、伪代码块等复杂结构，保持原文档的逻辑层次。
         </p>
         <p>
-          <strong>STEM 专业内容：</strong>特别优化对数学公式、化学分子式、物理图表、生物图谱、乐谱等专业领域内容的识别与转换。
+          <strong>STEM 专业内容：</strong>特别优化对数学公式、化学分子式、物理图表、生物图谱、乐谱、手写文本等专业领域内容的识别与转换。
         </p>
       </div>
     </section>
@@ -154,6 +154,9 @@
         </p>
         <p>
           Web 服务提供完整的 <strong>REST API</strong>（上传、查询、下载、停止、删除）与 <strong>WebSocket 实时推送</strong>能力，可与内部审批流、知识库索引、CI/CD 流水线等系统组合；生产环境请配置 JWT、HTTPS 与合理的速率限制。
+        </p>
+        <p>
+          支持 <strong>Docker 一键部署</strong>（包含主应用 + Redis + MySQL），5 分钟即可启动；也支持本地开发模式，适合调试与定制开发。
         </p>
       </div>
     </section>

@@ -241,6 +241,110 @@ def get_pdf_max_pages(db: Optional[Session] = None) -> int:
             db.close()
 
 
+def get_max_upload_size_mb(db: Optional[Session] = None) -> int:
+    """
+    获取最大上传文件大小（MB）
+    
+    Args:
+        db: 数据库会话（可选，如不提供则创建临时会话）
+        
+    Returns:
+        最大上传大小（MB），范围 1-500
+    """
+    close = False
+    if db is None:
+        from .database import SessionLocal
+
+        db = SessionLocal()
+        close = True
+    try:
+        row = get_app_settings_row(db)
+        size_mb = getattr(row, "max_upload_size_mb", 50)
+        if size_mb is None:
+            size_mb = 50
+        # 限制范围：1MB - 500MB
+        return max(1, min(500, int(size_mb)))
+    finally:
+        if close:
+            db.close()
+
+
+def get_nginx_max_body_size_mb() -> int:
+    """
+    从环境变量读取 Nginx 的 client_max_body_size 配置（MB）
+    
+    Returns:
+        Nginx 限制大小（MB），默认 55
+    """
+    nginx_size_str = os.environ.get("NGINX_MAX_BODY_SIZE", "55m")
+    
+    # 解析字符串，去除单位后缀
+    nginx_size_str = nginx_size_str.strip().lower()
+    
+    if nginx_size_str.endswith('m'):
+        # 例如: "55m" -> 55
+        return int(nginx_size_str[:-1])
+    elif nginx_size_str.endswith('g'):
+        # 例如: "1g" -> 1024
+        return int(nginx_size_str[:-1]) * 1024
+    elif nginx_size_str.endswith('k'):
+        # 例如: "55000k" -> 55 (向下取整)
+        return int(nginx_size_str[:-1]) // 1024
+    else:
+        # 假设是字节数
+        try:
+            return int(nginx_size_str) // (1024 * 1024)
+        except ValueError:
+            return 55  # 默认值
+
+
+def validate_upload_size_config(backend_mb: int) -> dict:
+    """
+    验证上传大小配置是否合理
+    
+    Args:
+        backend_mb: 后端配置的大小（MB）
+        
+    Returns:
+        验证结果字典：
+        - valid: 是否有效
+        - warning: 警告信息（如果有）
+        - nginx_mb: Nginx 当前配置
+        - recommended: 推荐的 Nginx 配置
+    """
+    nginx_mb = get_nginx_max_body_size_mb()
+    recommended_nginx = max(nginx_mb, int(backend_mb * 1.1))
+    
+    result = {
+        "valid": True,
+        "warning": "",
+        "nginx_mb": nginx_mb,
+        "recommended": recommended_nginx,
+    }
+    
+    # 检查后端配置是否超过 Nginx
+    if backend_mb > nginx_mb:
+        result["valid"] = False
+        result["warning"] = (
+            f"⚠️ 后端配置 ({backend_mb}MB) 超过 Nginx 限制 ({nginx_mb}MB)\n"
+            f"   用户将无法上传 {nginx_mb}-{backend_mb}MB 之间的文件\n"
+            f"   建议将 NGINX_MAX_BODY_SIZE 设置为 {recommended_nginx}m"
+        )
+    elif backend_mb == nginx_mb:
+        result["warning"] = (
+            f"💡 提示：后端与 Nginx 配置相同 ({backend_mb}MB)\n"
+            f"   建议 Nginx 略大于后端（如 {recommended_nginx}m），以留有余量"
+        )
+    elif nginx_mb < backend_mb * 1.05:
+        # Nginx 仅略大于后端（小于 5% 余量）
+        result["warning"] = (
+            f"💡 提示：Nginx 余量较小 ({nginx_mb}MB vs {backend_mb}MB)\n"
+            f"   建议设置为 {recommended_nginx}m（{int((recommended_nginx/backend_mb-1)*100)}% 余量）"
+        )
+    
+    return result
+
+
 def get_admin_pdf_max_pages_cap() -> int:
     """管理员解析 PDF 时的页数上限（视为「无限制」的可执行上界）。"""
     return max(1, int(os.environ.get("ADMIN_PDF_MAX_PAGES", "100000")))
@@ -414,6 +518,10 @@ def settings_to_admin_dict(db: Session) -> dict[str, Any]:
         "password_require_lowercase": bool(getattr(row, "password_require_lowercase", True)),
         "password_require_digit": bool(getattr(row, "password_require_digit", True)),
         "password_require_special": bool(getattr(row, "password_require_special", False)),
+        # 文件上传限制
+        "max_upload_size_mb": max(1, min(500, int(getattr(row, "max_upload_size_mb", 50) or 50))),
+        # Nginx 配置信息（只读）
+        "nginx_max_body_size_mb": get_nginx_max_body_size_mb(),
     }
 
 

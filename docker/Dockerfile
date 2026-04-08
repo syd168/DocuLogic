@@ -25,6 +25,9 @@ FROM python:3.10-slim
 # 安装系统依赖和 Nginx
 RUN apt-get update && apt-get install -y \
     nginx \
+    cron \
+    sqlite3 \
+    default-mysql-client \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
@@ -56,7 +59,16 @@ COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 RUN rm -f /etc/nginx/sites-enabled/default
 
 # 创建必要的目录
-RUN mkdir -p /app/out /app/logs /app/web/data
+RUN mkdir -p /app/out /app/logs /app/web/data /app/backups
+
+# 复制备份脚本
+COPY docker/backup_database.sh /app/backup_database.sh
+RUN chmod +x /app/backup_database.sh
+
+# 创建 cron 定时任务（每天凌晨 2 点执行备份）
+RUN echo "0 2 * * * cd /app && bash backup_database.sh >> /app/backups/backup.log 2>&1" > /etc/cron.d/doculogic-backup \
+    && chmod 0644 /etc/cron.d/doculogic-backup \
+    && crontab /etc/cron.d/doculogic-backup
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
@@ -74,5 +86,5 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
-# 启动脚本：同时运行 Nginx 和后端
-CMD bash -c "nginx & python web_server.py"
+# 启动脚本：同时运行 Nginx、cron 和后端
+CMD bash -c "nginx && cron && python web_server.py"

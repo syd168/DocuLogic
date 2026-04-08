@@ -140,7 +140,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-doculogic}
-      MYSQL_USER: ${MYSQL_USER:-doculogic}
+      # 注意：MYSQL_USER 不能是 root，创建一个普通用户
+      MYSQL_USER: ${MYSQL_APP_USER:-doculogic}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
     
     # 数据持久化

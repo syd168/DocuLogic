@@ -227,13 +227,25 @@ def check_single_login(user_id: int, new_token: str) -> Optional[Dict[str, Any]]
         如果有旧会话，返回旧会话信息；否则返回 None
     """
     old_session = get_user_session(user_id)
+    print(f"🔍 check_single_login: user_id={user_id}, old_session={'存在' if old_session else '不存在'}")
     
     if old_session:
         old_token = old_session.get("token")
+        print(f"   - old_token: {old_token[:30] if old_token else 'None'}...")
+        print(f"   - new_token: {new_token[:30]}...")
+        print(f"   - token相同? {old_token == new_token}")
+        
         if old_token and old_token != new_token:
             # 将旧 token 加入黑名单
-            revoke_token(old_token, reason="single_login_replaced")
-            logger.info(f"🔄 单点登录：用户 {user_id} 的旧 token 已被替换")
+            print(f"   - 正在拉黑旧 token...")
+            success = revoke_token(old_token, reason="single_login_replaced")
+            print(f"   - revoke_token 返回值: {success}")
+            if success:
+                print(f"🔄 单点登录：用户 {user_id} 的旧 token 已被替换")
+            else:
+                print(f"❌ 单点登录：无法拉黑旧 token (user_id={user_id})")
+        else:
+            print(f"   - 跳过拉黑（token相同或为空）")
     
     return old_session
 

@@ -25,7 +25,7 @@ echo "🌐 访问端口: ${HOST_PORT}"
 echo ""
 
 # 0. 检查 Docker 权限
-echo "[0/6] 检查 Docker 权限..."
+echo "[0/7] 检查 Docker 权限..."
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker 未运行或无权限"
     echo "   请执行: sudo systemctl start docker"
@@ -108,16 +108,29 @@ else
 fi
 echo ""
 
-# 4. 构建镜像
-echo "[4/6] 构建 Docker 镜像..."
+# 4. 停止旧服务（如果存在）
+echo "[4/6] 检查并停止旧服务..."
+cd docker
+if docker compose ps --services 2>/dev/null | grep -q .; then
+    echo "⚠️  检测到正在运行的服务，正在停止..."
+    docker compose down
+    echo "✓ 旧服务已停止"
+else
+    echo "✓ 没有运行中的服务"
+fi
+cd ..
+echo ""
+
+# 5. 构建镜像
+echo "[5/6] 构建 Docker 镜像..."
 cd docker
 docker compose build
 cd ..
 echo "✓ 镜像构建完成"
 echo ""
 
-# 5. 启动服务
-echo "[5/6] 启动服务..."
+# 6. 启动服务
+echo "[6/6] 启动服务..."
 export DATA_DIR="${DATA_DIR}"
 export MODEL_DIR="${MODEL_DIR}"
 export HOST_PORT="${HOST_PORT}"
@@ -128,8 +141,8 @@ docker compose up -d
 echo "✓ 服务已启动"
 echo ""
 
-# 6. 验证部署
-echo "[6/6] 验证部署..."
+# 7. 验证部署
+echo "[7/7] 验证部署..."
 echo "等待服务启动..."
 sleep 5
 

@@ -110,9 +110,8 @@ echo ""
 
 # 3.5. 数据迁移（如果切换到 MySQL）
 echo "[3.5/7] 检查数据库迁移..."
-cd ..  # 回到项目根目录
 
-# 读取 DATABASE_TYPE
+# 读取 DATABASE_TYPE（当前已在项目根目录）
 DATABASE_TYPE=$(grep -E '^DATABASE_TYPE=' .env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
 DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
 
@@ -151,7 +150,6 @@ else
     echo "✓ 使用 SQLite 数据库，无需迁移"
 fi
 
-cd docker  # 回到 docker 目录
 echo ""
 
 # 4. 停止旧服务（如果存在）
@@ -178,9 +176,9 @@ echo ""
 # 6. 启动服务
 echo "[6/7] 启动服务..."
 
-# 加载 .env 环境变量到当前 shell
+# 加载 .env 环境变量到当前 shell（当前已在项目根目录）
 set -a
-source ../.env
+source .env
 set +a
 
 # 导出 Docker Compose 需要的变量

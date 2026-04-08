@@ -22,6 +22,8 @@ services:
     
     # 环境变量配置
     environment:
+      # 运行环境（production/prod 会强制检查 JWT_SECRET）
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       # JWT 密钥（生产环境务必修改）
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       # 模型路径

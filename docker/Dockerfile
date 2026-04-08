@@ -76,6 +76,7 @@ ENV PYTHONUNBUFFERED=1 \
     FRONTEND_PORT=80 \
     MODEL_PATH=/app/weights \
     OUTPUT_DIR=/data/output \
+    ENVIRONMENT=development \
     JWT_SECRET=change-me-in-production \
     CORS_ORIGINS=http://localhost,http://127.0.0.1
 

@@ -177,9 +177,20 @@ echo ""
 
 # 6. 启动服务
 echo "[6/7] 启动服务..."
+
+# 加载 .env 环境变量到当前 shell
+set -a
+source ../.env
+set +a
+
+# 导出 Docker Compose 需要的变量
 export DATA_DIR="${DATA_DIR}"
 export MODEL_DIR="${MODEL_DIR}"
 export HOST_PORT="${HOST_PORT}"
+export DATABASE_TYPE="${DATABASE_TYPE}"
+export MYSQL_PASSWORD="${MYSQL_PASSWORD}"
+export MYSQL_USER="${MYSQL_USER}"
+export MYSQL_DATABASE="${MYSQL_DATABASE}"
 
 cd docker
 docker compose up -d

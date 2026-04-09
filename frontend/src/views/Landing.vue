@@ -433,6 +433,9 @@ onMounted(async () => {
 .landing-block--narrow {
   max-width: 75%;
   padding: 50px 20px; /* 窄板块稍小的内边距 */
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%);
+  border-radius: 16px;
+  margin-bottom: 20px;
 }
 .landing-title {
   margin: 0 0 12px; /* 增加底部间距 */
@@ -515,16 +518,17 @@ onMounted(async () => {
   background: linear-gradient(135deg, var(--accent), var(--accent-dim));
 }
 .landing-detail {
-  padding: 28px 32px; /* 增加内边距 */
-  background: var(--bg-elevated);
+  padding: 32px 36px; /* 增加内边距 */
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px; /* 增大圆角 */
   transition: all 0.3s ease;
-  animation: fadeIn 0.8s ease-out 0.6s both;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  /* 移除 fadeIn 动画，避免文字闪烁 */
 }
 .landing-detail:hover {
   border-color: var(--accent);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
   transform: translateY(-2px);
 }
 .landing-detail p {
@@ -532,6 +536,19 @@ onMounted(async () => {
   font-size: 15px; /* 增大字号 */
   line-height: 1.75; /* 增加行高 */
   color: var(--text-muted);
+  position: relative;
+  padding-left: 20px;
+}
+/* 为每个段落添加小圆点装饰 */
+.landing-detail p::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
 }
 .landing-detail p:last-child {
   margin-bottom: 0;
@@ -570,13 +587,13 @@ onMounted(async () => {
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
 }
 
-/* 不同图标的独特动画 */
+/* 不同图标的独特动画 - 简化版，移除旋转过度动画 */
 .icon-brain {
   animation: pulse 2s ease-in-out infinite;
 }
 
 .icon-crop {
-  animation: rotate-slow 8s linear infinite;
+  /* 剪刀不需要旋转，保持静态 */
 }
 
 .icon-palette {
@@ -600,7 +617,7 @@ onMounted(async () => {
 }
 
 .icon-globe {
-  animation: spin 10s linear infinite;
+  /* 地球不需要持续旋转，避免眩晕 */
 }
 
 .icon-database {
@@ -608,11 +625,11 @@ onMounted(async () => {
 }
 
 .icon-lock {
-  animation: lock-shake 3s ease-in-out infinite;
+  /* 锁不需要摇晃，保持静态 */
 }
 
 .icon-settings {
-  animation: settings-rotate 6s linear infinite;
+  /* 齿轮不需要持续旋转，避免眩晕 */
 }
 
 .icon-chart {
@@ -620,11 +637,11 @@ onMounted(async () => {
 }
 
 .icon-book {
-  animation: book-flip 3s ease-in-out infinite;
+  /* 书籍不需要翻转，保持静态 */
 }
 
 .icon-briefcase {
-  animation: briefcase-swing 2.5s ease-in-out infinite;
+  /* 公文包不需要摇摆，保持静态 */
 }
 
 .icon-graduation {
@@ -632,7 +649,7 @@ onMounted(async () => {
 }
 
 .icon-archive {
-  animation: archive-slide 3s ease-in-out infinite;
+  /* 档案柜不需要滑动，保持静态 */
 }
 
 .icon-flask {
@@ -640,7 +657,7 @@ onMounted(async () => {
 }
 
 .icon-newspaper {
-  animation: newspaper-flutter 2.5s ease-in-out infinite;
+  /* 报纸不需要飘动，保持静态 */
 }
 
 /* 图标悬停效果 */
@@ -649,22 +666,13 @@ onMounted(async () => {
   filter: drop-shadow(0 8px 16px rgba(99, 102, 241, 0.4));
 }
 
-/* 各种动画关键帧 */
+/* 各种动画关键帧 - 精简版，移除旋转过度动画 */
 @keyframes pulse {
   0%, 100% {
     transform: scale(1);
   }
   50% {
     transform: scale(1.1);
-  }
-}
-
-@keyframes rotate-slow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -718,42 +726,12 @@ onMounted(async () => {
   }
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes database-pulse {
   0%, 100% {
     transform: scaleY(1);
   }
   50% {
     transform: scaleY(1.1);
-  }
-}
-
-@keyframes lock-shake {
-  0%, 100% {
-    transform: rotate(0deg);
-  }
-  10%, 30%, 50%, 70%, 90% {
-    transform: rotate(-5deg);
-  }
-  20%, 40%, 60%, 80% {
-    transform: rotate(5deg);
-  }
-}
-
-@keyframes settings-rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -766,27 +744,6 @@ onMounted(async () => {
   }
 }
 
-@keyframes book-flip {
-  0%, 100% {
-    transform: rotateY(0deg);
-  }
-  50% {
-    transform: rotateY(15deg);
-  }
-}
-
-@keyframes briefcase-swing {
-  0%, 100% {
-    transform: rotate(0deg);
-  }
-  25% {
-    transform: rotate(-8deg);
-  }
-  75% {
-    transform: rotate(8deg);
-  }
-}
-
 @keyframes graduation-bounce {
   0%, 100% {
     transform: translateY(0) rotate(0deg);
@@ -796,30 +753,12 @@ onMounted(async () => {
   }
 }
 
-@keyframes archive-slide {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(8px);
-  }
-}
-
 @keyframes flask-bubble {
   0%, 100% {
     transform: scale(1) rotate(0deg);
   }
   50% {
     transform: scale(1.1) rotate(-10deg);
-  }
-}
-
-@keyframes newspaper-flutter {
-  0%, 100% {
-    transform: skewX(0deg);
-  }
-  50% {
-    transform: skewX(5deg);
   }
 }
 .feature::before {

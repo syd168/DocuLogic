@@ -1,5 +1,8 @@
 <template>
-  <div>
+  <div class="landing-page">
+    <!-- 粒子背景 Canvas -->
+    <canvas ref="particleCanvas" class="particle-canvas"></canvas>
+    
     <header class="topbar">
       <router-link class="brand" to="/"><span class="brand-mark">📄</span> DocuLogic</router-link>
       <div class="topbar-actions">
@@ -85,7 +88,7 @@
         </div>
         <div class="feature">
           <div class="feature-icon icon-database">🗄️</div>
-          <h3>MySQL/SQLite 灵活切换</h3>
+          <h3>MySQL/SQLite等多种数据库灵活切换</h3>
           <p>无缝切换数据库，Docker Compose 一键部署</p>
         </div>
         <div class="feature">
@@ -156,7 +159,7 @@
           <strong>复杂版面：</strong>能够处理图文混排、多栏布局、表格嵌套、LaTeX 公式、Mermaid 流程图、ABC 记谱法、化学式（SMILES）、伪代码块等复杂结构，保持原文档的逻辑层次。
         </p>
         <p>
-          <strong>STEM 专业内容：</strong>特别优化对数学公式、化学分子式、物理图表、生物图谱、乐谱、手写文本等专业领域内容的识别与转换。
+          <strong>专业支持：</strong>特别优化对数学公式、化学分子式、物理图表、生物图谱、乐谱、手写文本等专业领域内容的识别与转换。
         </p>
       </div>
     </section>
@@ -165,16 +168,16 @@
       <h2 class="landing-title">输出与对接</h2>
       <div class="landing-detail">
         <p>
-          每个任务产出包含：<strong>Markdown 文件</strong>（.mmd，清洗后的最终版本）、<strong>原始输出</strong>（_raw.mmd，模型直接生成的 HTML）、<strong>可视化图</strong>（_vis.png 或 _vis.zip，带 bbox 标注）以及可选的 <strong>assets 文件夹</strong>（裁剪出的独立图片）。
+          <strong>📄 完整输出包：</strong>规范 Markdown（.mmd）、原始模型输出、可视化标注图（带 bbox）及独立图像文件。
         </p>
         <p>
-          支持三种图片输出模式：<strong>base64</strong>（内嵌到 Markdown）、<strong>separate</strong>（独立文件 + ZIP 打包）、<strong>none</strong>（不输出图片）。管理员可配置全局默认值，用户也可设置个人偏好。
+          <strong>🖼️ 三种图像模式：</strong>Base64 嵌入（单文件）、独立文件（ZIP 打包）、不输出（纯文本），灵活配置。
         </p>
         <p>
-          Web 服务提供完整的 <strong>REST API</strong>（上传、查询、下载、停止、删除）与 <strong>WebSocket 实时推送</strong>能力，可与内部审批流、知识库索引、CI/CD 流水线等系统组合；生产环境请配置 JWT、HTTPS 与合理的速率限制。
+          <strong>⚡ RESTful API + WebSocket：</strong>支持上传、查询、下载、停止等操作，实时推送解析进度，轻松集成企业系统。
         </p>
         <p>
-          支持 <strong>Docker 一键部署</strong>（包含主应用 + Redis + MySQL），5 分钟即可启动；也支持本地开发模式，适合调试与定制开发。
+          <strong>🚀 灵活部署：</strong>Docker 一键部署（5分钟启动，支持 MySQL/PostgreSQL/MariaDB/SQLite）或本地开发模式。
         </p>
       </div>
     </section>
@@ -190,13 +193,144 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import http from '@/api/http'
 
 const user = ref(null)
 const registrationEnabled = ref(true)
+const particleCanvas = ref(null)
+let animationId = null
+let particles = []
+let mouseX = 0
+let mouseY = 0
+let targetMouseX = 0
+let targetMouseY = 0
+
+// 粒子类（支持视差效果）
+class Particle {
+  constructor(canvas) {
+    this.canvas = canvas
+    this.baseX = Math.random() * canvas.width
+    this.baseY = Math.random() * canvas.height
+    this.x = this.baseX
+    this.y = this.baseY
+    this.size = Math.random() * 2 + 0.5
+    this.speedX = (Math.random() - 0.5) * 0.3
+    this.speedY = (Math.random() - 0.5) * 0.3
+    this.opacity = Math.random() * 0.5 + 0.2
+    // 视差系数：不同深度的粒子移动速度不同
+    this.parallaxFactor = Math.random() * 0.02 + 0.01
+  }
+  
+  update() {
+    // 基础移动
+    this.baseX += this.speedX
+    this.baseY += this.speedY
+    
+    // 边界循环
+    if (this.baseX > this.canvas.width) this.baseX = 0
+    if (this.baseX < 0) this.baseX = this.canvas.width
+    if (this.baseY > this.canvas.height) this.baseY = 0
+    if (this.baseY < 0) this.baseY = this.canvas.height
+    
+    // 视差效果：根据鼠标位置偏移
+    const deltaX = (mouseX - this.canvas.width / 2) * this.parallaxFactor
+    const deltaY = (mouseY - this.canvas.height / 2) * this.parallaxFactor
+    
+    this.x = this.baseX + deltaX
+    this.y = this.baseY + deltaY
+  }
+  
+  draw(ctx) {
+    ctx.fillStyle = `rgba(99, 102, 241, ${this.opacity})`
+    ctx.beginPath()
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
+function initParticles() {
+  const canvas = particleCanvas.value
+  if (!canvas) return
+  
+  const ctx = canvas.getContext('2d')
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+  
+  // 创建粒子（增加到150个以增强视觉效果）
+  const particleCount = Math.min(150, Math.floor(window.innerWidth * window.innerHeight / 8000))
+  particles = []
+  for (let i = 0; i < particleCount; i++) {
+    particles.push(new Particle(canvas))
+  }
+  
+  animate()
+}
+
+function animate() {
+  const canvas = particleCanvas.value
+  if (!canvas) return
+  
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  
+  // 平滑插值鼠标位置
+  mouseX += (targetMouseX - mouseX) * 0.1
+  mouseY += (targetMouseY - mouseY) * 0.1
+  
+  // 更新和绘制粒子
+  particles.forEach(particle => {
+    particle.update()
+    particle.draw(ctx)
+  })
+  
+  // 绘制连线
+  connectParticles(ctx)
+  
+  animationId = requestAnimationFrame(animate)
+}
+
+function connectParticles(ctx) {
+  const maxDistance = 150
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x
+      const dy = particles[i].y - particles[j].y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      
+      if (distance < maxDistance) {
+        const opacity = (1 - distance / maxDistance) * 0.2
+        ctx.strokeStyle = `rgba(99, 102, 241, ${opacity})`
+        ctx.lineWidth = 0.5
+        ctx.beginPath()
+        ctx.moveTo(particles[i].x, particles[i].y)
+        ctx.lineTo(particles[j].x, particles[j].y)
+        ctx.stroke()
+      }
+    }
+  }
+}
+
+function handleMouseMove(e) {
+  targetMouseX = e.clientX
+  targetMouseY = e.clientY
+}
+
+function handleResize() {
+  const canvas = particleCanvas.value
+  if (canvas) {
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    initParticles()
+  }
+}
 
 onMounted(async () => {
+  // 初始化粒子背景
+  initParticles()
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('mousemove', handleMouseMove)
+  
   try {
     const { data } = await http.get('/api/settings/public')
     registrationEnabled.value = data.registration_enabled !== false
@@ -209,6 +343,14 @@ onMounted(async () => {
   } catch {
     user.value = null
   }
+})
+
+onUnmounted(() => {
+  if (animationId) {
+    cancelAnimationFrame(animationId)
+  }
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('mousemove', handleMouseMove)
 })
 </script>
 
@@ -253,6 +395,17 @@ onMounted(async () => {
   50% {
     transform: translateY(-10px);
   }
+}
+
+/* 粒子背景 Canvas */
+.particle-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* Hero 区域样式与动画 */
@@ -587,17 +740,23 @@ onMounted(async () => {
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
 }
 
-/* 不同图标的独特动画 - 简化版，移除旋转过度动画 */
+/* 所有图标统一的悬停效果 */
+.feature:hover .feature-icon {
+  transform: scale(1.15) translateY(-6px);
+  filter: drop-shadow(0 8px 16px rgba(99, 102, 241, 0.4));
+}
+
+/* 不同图标的独特动画 - 统一风格，避免过度眩晕 */
 .icon-brain {
-  animation: pulse 2s ease-in-out infinite;
+  animation: pulse 2.5s ease-in-out infinite;
 }
 
 .icon-crop {
-  /* 剪刀不需要旋转，保持静态 */
+  animation: subtle-rotate 3s ease-in-out infinite;
 }
 
 .icon-palette {
-  animation: bounce 2s ease-in-out infinite;
+  animation: bounce 2.5s ease-in-out infinite;
 }
 
 .icon-package {
@@ -605,11 +764,11 @@ onMounted(async () => {
 }
 
 .icon-bolt {
-  animation: flash 1.5s ease-in-out infinite;
+  animation: flash 2s ease-in-out infinite;
 }
 
 .icon-shield {
-  animation: shield-pulse 2s ease-in-out infinite;
+  animation: shield-pulse 2.5s ease-in-out infinite;
 }
 
 .icon-rocket {
@@ -617,62 +776,65 @@ onMounted(async () => {
 }
 
 .icon-globe {
-  /* 地球不需要持续旋转，避免眩晕 */
+  animation: globe-pulse 3s ease-in-out infinite;
 }
 
 .icon-database {
-  animation: database-pulse 2s ease-in-out infinite;
+  animation: database-pulse 2.5s ease-in-out infinite;
 }
 
 .icon-lock {
-  /* 锁不需要摇晃，保持静态 */
+  animation: lock-sway 3s ease-in-out infinite;
 }
 
 .icon-settings {
-  /* 齿轮不需要持续旋转，避免眩晕 */
+  animation: settings-bounce 3s ease-in-out infinite;
 }
 
 .icon-chart {
-  animation: chart-grow 2s ease-in-out infinite;
+  animation: chart-grow 2.5s ease-in-out infinite;
 }
 
 .icon-book {
-  /* 书籍不需要翻转，保持静态 */
+  animation: book-flip 3s ease-in-out infinite;
 }
 
 .icon-briefcase {
-  /* 公文包不需要摇摆，保持静态 */
+  animation: briefcase-bounce 2.5s ease-in-out infinite;
 }
 
 .icon-graduation {
-  animation: graduation-bounce 2s ease-in-out infinite;
+  animation: graduation-bounce 2.5s ease-in-out infinite;
 }
 
 .icon-archive {
-  /* 档案柜不需要滑动，保持静态 */
+  animation: archive-slide 3s ease-in-out infinite;
 }
 
 .icon-flask {
-  animation: flask-bubble 2s ease-in-out infinite;
+  animation: flask-bubble 2.5s ease-in-out infinite;
 }
 
 .icon-newspaper {
-  /* 报纸不需要飘动，保持静态 */
+  animation: newspaper-float 3s ease-in-out infinite;
 }
 
-/* 图标悬停效果 */
-.feature:hover .feature-icon {
-  transform: scale(1.2) translateY(-8px);
-  filter: drop-shadow(0 8px 16px rgba(99, 102, 241, 0.4));
-}
-
-/* 各种动画关键帧 - 精简版，移除旋转过度动画 */
+/* 各种动画关键帧 - 统一风格，避免过度眩晕 */
 @keyframes pulse {
   0%, 100% {
     transform: scale(1);
   }
   50% {
-    transform: scale(1.1);
+    transform: scale(1.08);
+  }
+}
+
+@keyframes subtle-rotate {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(10deg);
   }
 }
 
@@ -681,7 +843,7 @@ onMounted(async () => {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-10px);
+    transform: translateY(-8px);
   }
 }
 
@@ -690,7 +852,7 @@ onMounted(async () => {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-12px);
+    transform: translateY(-10px);
   }
 }
 
@@ -700,8 +862,8 @@ onMounted(async () => {
     transform: scale(1);
   }
   50% {
-    opacity: 0.7;
-    transform: scale(1.15);
+    opacity: 0.75;
+    transform: scale(1.1);
   }
 }
 
@@ -710,7 +872,7 @@ onMounted(async () => {
     transform: scale(1) rotate(0deg);
   }
   50% {
-    transform: scale(1.08) rotate(5deg);
+    transform: scale(1.06) rotate(3deg);
   }
 }
 
@@ -719,10 +881,28 @@ onMounted(async () => {
     transform: translateY(0) rotate(0deg);
   }
   25% {
-    transform: translateY(-8px) rotate(-5deg);
+    transform: translateY(-6px) rotate(-3deg);
   }
   75% {
-    transform: translateY(-4px) rotate(5deg);
+    transform: translateY(-3px) rotate(3deg);
+  }
+}
+
+@keyframes gentle-rotate {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.05) rotate(5deg);
+  }
+}
+
+@keyframes globe-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
   }
 }
 
@@ -731,7 +911,37 @@ onMounted(async () => {
     transform: scaleY(1);
   }
   50% {
-    transform: scaleY(1.1);
+    transform: scaleY(1.08);
+  }
+}
+
+@keyframes lock-sway {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-5deg);
+  }
+  75% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes settings-rotate {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.06) rotate(8deg);
+  }
+}
+
+@keyframes settings-bounce {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(5deg);
   }
 }
 
@@ -740,7 +950,25 @@ onMounted(async () => {
     transform: scaleY(1);
   }
   50% {
-    transform: scaleY(1.15);
+    transform: scaleY(1.1);
+  }
+}
+
+@keyframes book-flip {
+  0%, 100% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(15deg);
+  }
+}
+
+@keyframes briefcase-bounce {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(5deg);
   }
 }
 
@@ -749,7 +977,16 @@ onMounted(async () => {
     transform: translateY(0) rotate(0deg);
   }
   50% {
-    transform: translateY(-10px) rotate(10deg);
+    transform: translateY(-8px) rotate(8deg);
+  }
+}
+
+@keyframes archive-slide {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
   }
 }
 
@@ -758,7 +995,16 @@ onMounted(async () => {
     transform: scale(1) rotate(0deg);
   }
   50% {
-    transform: scale(1.1) rotate(-10deg);
+    transform: scale(1.08) rotate(-8deg);
+  }
+}
+
+@keyframes newspaper-float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(3deg);
   }
 }
 .feature::before {

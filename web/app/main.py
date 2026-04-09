@@ -449,7 +449,6 @@ async def upload_document(
     
     if not allow_multi:
         # 禁止多文件上传时，检查用户是否有正在处理的任务
-        from .models import ParseJob
         active_jobs = db.query(ParseJob).filter(
             ParseJob.user_id == current_user.id,
             ParseJob.status.in_(["processing", "queued"])

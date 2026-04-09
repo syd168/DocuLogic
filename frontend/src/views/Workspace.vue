@@ -199,7 +199,7 @@
                   <template #content>
                     <div style="max-width: 320px; line-height: 1.6;">
                       <div style="font-weight: 600; margin-bottom: 8px;">💡 使用说明</div>
-                      <div>• 滑动条最大值 = min(您的上限, 队列总页数)</div>
+                      <div>• 滑动条最大值 = min(您的上限, 单个文件最大页数)</div>
                       <div>• PDF 按实际页数计算，图片每张计 1 页</div>
                       <div>• 仅对队列中的 PDF 生效</div>
                     </div>
@@ -246,7 +246,7 @@
                   <span class="muted pdf-pages-hint">
                     <template v-if="pdfPageCountLoading">⏳ 正在读取 PDF 页数…</template>
                     <template v-else-if="queueTotalPages != null">
-                      上限 {{ pdfPagesMax }} 页 · 当前 {{ pdfPagesSliderMax }} 页
+                      上限 {{ pdfPagesMax }} 页 · 单文件最大 {{ pdfPagesSliderMax }} 页
                     </template>
                     <template v-else>
                       上限 {{ pdfPagesMax }} 页
@@ -1944,14 +1944,27 @@ const queueTotalPages = computed(() => {
   return sum
 })
 
+/** 队列中单个文件的最大页数 */
+const queueMaxSingleFilePages = computed(() => {
+  let maxPages = 0
+  for (const x of parseQueue.value) {
+    const c = queueItemPageContribution(x)
+    if (!c.ready) return null
+    // 图片计 1 页，PDF 取实际页数
+    maxPages = Math.max(maxPages, c.n)
+  }
+  return maxPages
+})
+
 /**
- * 滑块 / 数字框的 max：min(当前用户 PDF 页数上限, 队列文档总页数)。
- * 总页数 = 各 PDF 实际页数之和 + 每张图片计 1 页；尚有 PDF 未读出页数时无法合计，max 暂等于用户上限。
+ * 滑块 / 数字框的 max：min(当前用户 PDF 页数上限, 队列中单个文件最大页数)。
+ * 因为“单个文件解析页数”是针对每个文件的限制，不是所有文件的总和。
+ * 单文件页数 = PDF 实际页数或图片计 1 页；尚有 PDF 未读出页数时无法合计，max 暂等于用户上限。
  */
 const pdfPagesSliderMax = computed(() => {
   const userCap = pdfPagesMax.value
-  const total = queueTotalPages.value
-  if (total != null && total > 0) return Math.min(userCap, total)
+  const maxSingleFile = queueMaxSingleFilePages.value
+  if (maxSingleFile != null && maxSingleFile > 0) return Math.min(userCap, maxSingleFile)
   return userCap
 })
 
@@ -5595,13 +5608,12 @@ async function stopJob() {
 }
 
 .source-radio-group {
-  display: flex;
-  width: 100%;
+  display: inline-flex;
+  width: auto;
 }
 
 /* 确保单选按钮组与标签左对齐 */
 .source-radio-group :deep(.el-radio-button) {
-  flex: 1;
   margin: 0;
   padding: 0;
 }

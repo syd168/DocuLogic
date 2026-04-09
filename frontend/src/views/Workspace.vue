@@ -247,24 +247,6 @@
                   </span>
                   <span class="pdf-pages-range-max">{{ pdfPagesSliderMax }}</span>
                 </div>
-                
-                <!-- ✅ 新增：显示已用页数和剩余配额 -->
-                <div v-if="hasQueue && queueUsedPages > 0" class="pdf-pages-quota-info">
-                  <div class="quota-bar">
-                    <div 
-                      class="quota-used" 
-                      :style="{ width: Math.min(100, (queueUsedPages / pdfPagesMax) * 100) + '%' }"
-                    ></div>
-                  </div>
-                  <div class="quota-text">
-                    <span v-if="canAddMoreFiles" class="quota-ok">
-                      ✅ 已用 {{ queueUsedPages }}/{{ pdfPagesMax }} 页，剩余 {{ pdfPagesMax - queueUsedPages }} 页
-                    </span>
-                    <span v-else class="quota-full">
-                      ⚠️ 已达单次操作上限 {{ pdfPagesMax }} 页，无法继续添加文件
-                    </span>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -1941,40 +1923,6 @@ const queueTotalPages = computed(() => {
 })
 
 /**
- * 计算队列中已占用的页数（用于判断是否还能继续添加文件）
- * PDF: 使用实际页数或默认值
- * 图片: 计为 1 页
- */
-const queueUsedPages = computed(() => {
-  let sum = 0
-  for (const x of parseQueue.value) {
-    if (/\.pdf$/i.test(x.file.name)) {
-      // PDF: 如果已知页数则用实际值，否则用当前设置的每文件页数
-      if (typeof x.pdfNumPages === 'number' && x.pdfNumPages > 0) {
-        sum += Math.min(x.pdfNumPages, pdfPagesRequested.value)
-      } else {
-        sum += pdfPagesRequested.value
-      }
-    } else {
-      // 图片: 计为 1 页
-      sum += 1
-    }
-  }
-  return sum
-})
-
-/**
- * 检查是否还能继续添加文件（至少保留一个文件的配额）
- */
-const canAddMoreFiles = computed(() => {
-  const userCap = pdfPagesMax.value
-  const used = queueUsedPages.value
-  const remaining = userCap - used
-  // 至少还能容纳 1 页（一张图片或一页 PDF）
-  return remaining >= 1
-})
-
-/**
  * 滑块 / 数字框的 max：min(当前用户 PDF 页数上限, 队列文档总页数)。
  * 总页数 = 各 PDF 实际页数之和 + 每张图片计 1 页；尚有 PDF 未读出页数时无法合计，max 暂等于用户上限。
  */
@@ -2086,48 +2034,14 @@ async function loadPdfNumPagesForQueueItem(item) {
   clampPdfPagesRequested()
 }
 
-/**
- * 上传时：不超过账号上限、不超过当前输入，且不超过该 PDF 实际页数（若已知）
- * ✅ 新增：考虑单次操作总页数限制，动态分配每文件页数
- */
-function effectivePdfPagesForItem(item, currentIndex = -1) {
+/** 上传时：不超过账号上限、不超过当前输入，且不超过该 PDF 实际页数（若已知） */
+function effectivePdfPagesForItem(item) {
   const cap = pdfPagesMax.value
   const want = Math.min(cap, Math.max(1, Math.round(Number(pdfPagesRequested.value) || PDF_PAGES_DEFAULT)))
-  
   if (!/\.pdf$/i.test(item.file.name)) return want
-  
   const doc = item.pdfNumPages
-  let maxForThisFile = want
-  if (typeof doc === 'number' && doc > 0) {
-    maxForThisFile = Math.min(want, doc)
-  }
-  
-  // ✅ 如果是批量解析，需要考虑剩余配额
-  if (currentIndex >= 0 && parseQueue.value.length > 1) {
-    // 计算已使用页数
-    let usedPages = 0
-    for (let i = 0; i < currentIndex; i++) {
-      const prevItem = parseQueue.value[i]
-      if (/\.pdf$/i.test(prevItem.file.name)) {
-        const prevPages = effectivePdfPagesForItem(prevItem, -1)  // 递归调用但不继续累计
-        usedPages += prevPages
-      } else {
-        usedPages += 1
-      }
-    }
-    
-    // 计算剩余配额
-    const remaining = cap - usedPages
-    if (remaining <= 0) {
-      // 配额已用完，返回 0 表示不应解析此文件
-      return 0
-    }
-    
-    // 取最小值：用户设置、文件实际页数、剩余配额
-    return Math.min(maxForThisFile, remaining)
-  }
-  
-  return maxForThisFile
+  if (typeof doc === 'number' && doc > 0) return Math.min(want, doc)
+  return want
 }
 
 const fileLabel = computed(() => {
@@ -2205,44 +2119,6 @@ function addFilesToQueue(fileList) {
     if (fileList && fileList.length) ElMessage.warning('没有可添加的文件（仅支持图片或 PDF）')
     return
   }
-  
-  // ✅ 检查单次操作总页数限制
-  const userCap = pdfPagesMax.value
-  const currentUsed = queueUsedPages.value
-  
-  // 计算新文件的预估页数
-  let newFilesPages = 0
-  for (const f of arr) {
-    if (/\.pdf$/i.test(f.name)) {
-      // PDF: 使用当前设置的每文件页数作为预估值
-      newFilesPages += pdfPagesRequested.value
-    } else {
-      // 图片: 计为 1 页
-      newFilesPages += 1
-    }
-  }
-  
-  const totalAfterAdd = currentUsed + newFilesPages
-  
-  // 如果添加后超过上限，且队列中已有文件，则禁止添加
-  if (totalAfterAdd > userCap && parseQueue.value.length > 0) {
-    const remaining = userCap - currentUsed
-    ElMessage.error(
-      `单次操作总页数限制为 ${userCap} 页，\n` +
-      `当前已占用 ${currentUsed} 页，剩余 ${remaining} 页，\n` +
-      `无法继续添加文件。请移除部分文件或调整每文件解析页数。`
-    )
-    return
-  }
-  
-  // 即使超过限制，也至少允许添加一个文件（如果队列为空）
-  if (totalAfterAdd > userCap && parseQueue.value.length === 0) {
-    ElMessage.warning(
-      `注意：文件总页数 (${newFilesPages}) 超过您的上限 (${userCap})，\n` +
-      `系统将只解析前 ${userCap} 页。`
-    )
-  }
-  
   const existing = new Set(parseQueue.value.map((x) => parseQueueFileKey(x.file)))
   const seenThisPick = new Set()
   const newFiles = []
@@ -3702,32 +3578,6 @@ async function startParse() {
     return
   }
   
-  // ✅ 检查单次操作总页数限制
-  const userCap = pdfPagesMax.value
-  let estimatedTotalPages = 0
-  for (const item of queue) {
-    if (/\.pdf$/i.test(item.file.name)) {
-      // PDF: 使用实际页数或当前设置值
-      if (typeof item.pdfNumPages === 'number' && item.pdfNumPages > 0) {
-        estimatedTotalPages += Math.min(item.pdfNumPages, pdfPagesRequested.value)
-      } else {
-        estimatedTotalPages += pdfPagesRequested.value
-      }
-    } else {
-      // 图片: 计为 1 页
-      estimatedTotalPages += 1
-    }
-  }
-  
-  // 如果超过上限，提示用户并拒绝执行
-  if (estimatedTotalPages > userCap) {
-    ElMessage.error(
-      `单次操作总页数 ${estimatedTotalPages} 超过上限 ${userCap}，\n` +
-      `请移除部分文件或调整每文件解析页数后再试。`
-    )
-    return
-  }
-  
   batchAbort.value = false
   parseErr.value = ''
   parseBatchResults.value = []
@@ -3755,16 +3605,7 @@ async function startParse() {
     fd.append('file', item.file)
     if (p) fd.append('prompt', p)
     if (/\.pdf$/i.test(name)) {
-      // ✅ 传递当前索引，实现智能分配
-      const pagesForThisFile = effectivePdfPagesForItem(item, i)
-      if (pagesForThisFile > 0) {
-        fd.append('pdf_pages', String(pagesForThisFile))
-      } else {
-        // 配额已用完，跳过此文件
-        ElMessage.warning(`${name}：配额已用完，已跳过`)
-        results.push({ ok: false, filename: name, error: '单次操作总页数限制已用完' })
-        continue
-      }
+      fd.append('pdf_pages', String(effectivePdfPagesForItem(item)))
     }
 
     try {
@@ -6057,51 +5898,6 @@ async function stopJob() {
   line-height: 1.45;
   flex: 1;
   text-align: center;
-}
-
-/* ✅ 新增：配额显示条 */
-.pdf-pages-quota-info {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.quota-bar {
-  height: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 8px;
-  position: relative;
-}
-
-.quota-used {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #34d399);
-  border-radius: 4px;
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
-}
-
-.quota-text {
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.quota-ok {
-  color: #10b981;
-  font-weight: 500;
-}
-
-.quota-full {
-  color: #f59e0b;
-  font-weight: 600;
-  animation: pulse-warning 2s ease-in-out infinite;
-}
-
-@keyframes pulse-warning {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
 }
 
 .user-pdf-limit-row {

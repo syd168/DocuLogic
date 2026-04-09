@@ -56,7 +56,7 @@ cd DocuLogic
 - ✅ 创建数据目录（~/doculogic/）
 - ✅ 下载模型权重（如需要）
 - ✅ 生成安全密钥（JWT_SECRET）
-- ✅ 启动服务（主应用 + Redis + MySQL）
+- ✅ 启动服务（主应用 + Redis + SQLite/MySQL/PostgreSQL/MariaDBt）
 
 #### 常用 Docker 命令
 
@@ -123,84 +123,37 @@ cp .env.example .env
 
 ### 文档解析
 - 拖拽上传或选择文件，支持批量上传
+
 - 实时进度显示，PDF 页数自定义
+
 - 可视化预览（PNG/ZIP），Markdown 下载
 
+  ![image-20260409192154579](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192154579.png)
+
 ### 后台管理
+
 - 系统设置（注册、验证码、解析限制）
+
+  ![image-20260409192539587](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192539587.png)
+
 - 用户管理（CRUD + 批量操作）
+
+  ![image-20260409192456259](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192456259.png)
+
 - 生成记录查询与清理
+
+  ![image-20260409192515300](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192515300.png)
+
 - 模型下载与重载
 
-## 🏗️ 架构设计
-
-```
-┌─────────────────────────────────────┐
-│         客户端层                      │
-│  Web UI (Vue 3) / API SDK          │
-└──────────────┬──────────────────────┘
-               │ HTTP/WebSocket
-┌──────────────▼──────────────────────┐
-│         网关层                        │
-│  Nginx (静态文件 + 反向代理)        │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│         应用层                        │
-│  FastAPI Backend                     │
-│  ├─ Auth Router    (认证)           │
-│  ├─ Parse Router   (解析)           │
-│  └─ Admin Router   (管理)           │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│         数据层                        │
-│  MySQL / SQLite  (数据存储)         │
-│  Redis           (缓存)             │
-│  File System     (文件存储)         │
-└─────────────────────────────────────┘
-```
+  ![image-20260409192613196](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192613196.png)
 
 ### 技术栈
 
 **后端**：FastAPI + SQLAlchemy + JWT + Redis  
 **前端**：Vue 3 + Element Plus + Vite  
-**基础设施**：Docker + Nginx + MySQL/SQLite  
+**基础设施**：Docker + Nginx + MySQL/SQLite等  
 **AI 模型**：Logics-Parsing-v2 (PyTorch + Transformers)
-
-## 📝 API 文档
-
-启动后访问：
-- **Swagger UI**: http://localhost:8030/api/docs
-- **ReDoc**: http://localhost:8030/api/redoc
-
-### 主要 API 端点
-
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| POST | `/api/auth/login` | 用户登录 | ❌ |
-| POST | `/api/jobs/upload` | 上传解析任务 | ✅ |
-| GET | `/api/jobs/{id}` | 查询任务状态 | ✅ |
-| WS | `/ws/jobs/{id}` | WebSocket 实时进度 | ✅ |
-| GET | `/api/admin/settings` | 获取系统设置 | ✅ Admin |
-
-### 使用示例
-
-```bash
-# 1. 登录获取 Token
-curl -X POST http://localhost:8030/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "admin123"}'
-
-# 2. 上传文档
-curl -X POST http://localhost:8030/api/jobs/upload \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@document.pdf"
-
-# 3. 查询状态
-curl http://localhost:8030/api/jobs/<job_id> \
-  -H "Authorization: Bearer <token>"
-```
 
 ## 📂 项目结构
 
@@ -244,41 +197,6 @@ DocuLogic/
 | `ADMIN_USERNAMES` | 管理员用户名 | `admin` |
 | `DATABASE_TYPE` | 数据库类型 | `mysql` / `sqlite` |
 
-## 🌟 项目特色
-
-### 1. **企业级安全**
-- JWT + SSO + Token 黑名单
-- 7 个安全响应头（CSP、HSTS 等）
-- 日志自动脱敏（邮箱、手机号）
-- SSRF 防护、路径遍历防护
-
-### 2. **智能化解析**
-- 端到端单模型，无需复杂流水线
-- STEM 内容识别（公式、化学结构）
-- Parsing-2.0（流程图、乐谱、伪代码）
-- 复杂版面处理（多栏报纸、杂志）
-
-### 3. **灵活部署**
-- Docker 一键部署（5 分钟启动）
-- 多数据库支持（SQLite/MySQL/PostgreSQL/MariaDB）
-- 自动备份（每天凌晨 2 点）
-- GPU 加速（推理速度提升 5-10 倍）
-
-### 4. **优秀体验**
-- 拖拽上传，批量处理
-- WebSocket 实时进度推送
-- 语义化图标，友好提示
-- 响应式设计，适配移动端
-
-## 📊 性能指标
-
-Logics-Parsing-v2 模型基准测试：
-- **OmniDocBench-v1.5**：总体得分 **93.23**
-- **LogicsDocBench**：总体得分 **82.16**
-- 支持 9 大类、20+ 小类文档类型
-
-详细数据见 [logics-parsingv2/README.md](logics-parsingv2/README.md)
-
 ## 🚀 版本历史
 
 ### v2.3.0 (最新)
@@ -287,6 +205,7 @@ Logics-Parsing-v2 模型基准测试：
 - 📖 完善文档和 GitHub 链接
 
 ### v2.2.0
+
 - ✨ 单点登录友好提示
 - ✨ 文件上传精细控制（多文件开关、自定义大小）
 - ✨ UI 优化（折叠面板图标、视觉层次）
@@ -312,6 +231,7 @@ A: 检查防火墙开放 8030 端口，查看日志 `docker logs doculogic`
 A: 确认 `MODEL_PATH` 正确，检查 GPU 驱动
 
 **Q: 如何备份数据？**  
+
 ```bash
 # MySQL 备份
 docker exec doculogic-mysql mysqldump -uroot -p${MYSQL_PASSWORD} doculogic > backup.sql
@@ -325,16 +245,6 @@ tar -czf output_backup.tar.gz ~/doculogic/data/output/
 git pull origin main
 cd docker && docker compose down && docker compose up -d --build
 ```
-
-## 🤝 贡献指南
-
-欢迎贡献代码、报告问题或提出建议！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
 
 ## 📝 许可证
 

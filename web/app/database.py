@@ -166,6 +166,7 @@ def init_db():
     migrate_app_settings_login_timeout()
     migrate_app_settings_password_rules()  # 密码规则配置
     migrate_app_settings_max_upload_size()  # 文件上传大小限制
+    migrate_app_settings_allow_multi_file_upload()  # 是否允许多文件上传
     migrate_app_settings_init_defaults()  # 初始化默认配置值
     _bootstrap_settings_and_admins()  # 引导初始数据
 
@@ -276,10 +277,14 @@ def migrate_app_settings():
     if not insp.has_table("app_settings"):
         return
     
-    # 兼容 SQLite 和 MySQL
+    # 根据不同数据库类型使用兼容的 SQL 语法
     if DATABASE_URL.startswith("sqlite"):
         sql = "INSERT OR IGNORE INTO app_settings (id) VALUES (1)"
+    elif DATABASE_URL.startswith("postgresql") or DATABASE_URL.startswith("postgres"):
+        # PostgreSQL 使用 ON CONFLICT DO NOTHING
+        sql = "INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING"
     else:
+        # MySQL / MariaDB 使用 INSERT IGNORE
         sql = "INSERT IGNORE INTO app_settings (id) VALUES (1)"
     
     with engine.begin() as conn:
@@ -477,11 +482,33 @@ def migrate_app_settings_init_defaults():
                 password_require_special = 0,
                 login_timeout_minutes = 10,
                 stale_job_timeout_minutes = 60,
-                max_upload_size_mb = 50
+                max_upload_size_mb = 50,
+                allow_multi_file_upload = 1
             WHERE id = 1
             """
             conn.execute(text(update_sql))
             print("✅ 系统设置已初始化")
+
+
+def migrate_app_settings_allow_multi_file_upload():
+    """为 app_settings 表添加 allow_multi_file_upload 字段（是否允许多文件上传）"""
+    from sqlalchemy import inspect
+    
+    db = SessionLocal()
+    try:
+        inspector = inspect(db.bind)
+        cols = [c["name"] for c in inspector.get_columns("app_settings")]
+        if "allow_multi_file_upload" in cols:
+            return
+        # SQLite / MySQL 通用：ALTER TABLE ADD COLUMN
+        db.execute(text("ALTER TABLE app_settings ADD COLUMN allow_multi_file_upload BOOLEAN DEFAULT 1"))
+        db.commit()
+        print("✅ 已添加 app_settings.allow_multi_file_upload 字段")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ 迁移 allow_multi_file_upload 失败: {e}")
+    finally:
+        db.close()
 
 
 def get_db():

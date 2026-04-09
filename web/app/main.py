@@ -442,6 +442,24 @@ async def upload_document(
             status_code=413,
             detail=f"文件过大，最大支持 {max_upload_size_mb}MB"
         )
+    
+    # 检查是否允许多文件上传
+    from .settings_service import get_allow_multi_file_upload
+    allow_multi = get_allow_multi_file_upload(db)
+    
+    if not allow_multi:
+        # 禁止多文件上传时，检查用户是否有正在处理的任务
+        from .models import ParseJob
+        active_jobs = db.query(ParseJob).filter(
+            ParseJob.user_id == current_user.id,
+            ParseJob.status.in_(["processing", "queued"])
+        ).count()
+        
+        if active_jobs > 0:
+            raise HTTPException(
+                status_code=429,
+                detail="当前有任务正在处理中，请等待完成后再上传新文件（已禁用多文件上传）"
+            )
 
     actor = db.query(User).filter(User.id == current_user.id).first()
     if not actor:

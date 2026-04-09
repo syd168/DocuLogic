@@ -125,60 +125,156 @@ else
 fi
 echo ""
 
-# 3.5. 数据迁移（如果切换到 MySQL）
+# 3.5. 数据迁移（如果切换到外部数据库）
 echo "[3.5/7] 检查数据库迁移..."
 
 # 读取 DATABASE_TYPE（去除注释和空格）
 DATABASE_TYPE=$(grep -E '^DATABASE_TYPE=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
 DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
 
-if [ "$DATABASE_TYPE" = "mysql" ]; then
-    echo "ℹ️  检测到使用 MySQL 数据库"
-    
-    # 检查 SQLite 数据库是否存在
-    SQLITE_DB="web/data/app.db"
-    MYSQL_SQL="web/data/mysql.sql"
-    
-    if [ -f "$SQLITE_DB" ] && [ ! -f "$MYSQL_SQL" ]; then
-        echo "⚠️  发现 SQLite 数据库，但未找到 MySQL 迁移文件"
-        echo "   是否现在导出为 SQL 文件？"
-        read -p "   执行导出？[y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "🔄 开始导出数据..."
-            
-            # 执行导出脚本
-            if python3 migrate_sqlite_to_mysql.py export; then
-                echo "✅ 数据导出成功: $MYSQL_SQL"
+case "$DATABASE_TYPE" in
+    mysql)
+        echo "ℹ️  检测到使用 MySQL 数据库"
+        
+        # 检查 SQLite 数据库是否存在
+        SQLITE_DB="web/data/app.db"
+        MYSQL_SQL="web/data/mysql.sql"
+        
+        if [ -f "$SQLITE_DB" ] && [ ! -f "$MYSQL_SQL" ]; then
+            echo "⚠️  发现 SQLite 数据库，但未找到 MySQL 迁移文件"
+            echo "   是否现在导出为 SQL 文件？"
+            read -p "   执行导出？[y/N]: " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo "🔄 开始导出数据..."
+                
+                # 执行导出脚本
+                if python3 migrate_sqlite_to_mysql.py export; then
+                    echo "✅ 数据导出成功: $MYSQL_SQL"
+                else
+                    echo "❌ 数据导出失败"
+                    exit 1
+                fi
             else
-                echo "❌ 数据导出失败"
-                exit 1
+                echo "ℹ️  跳过导出，MySQL 将从空数据库开始"
             fi
+        elif [ -f "$MYSQL_SQL" ]; then
+            echo "✅ 找到 MySQL 迁移文件: $MYSQL_SQL"
+            echo "   Docker 启动后将自动导入数据"
         else
-            echo "ℹ️  跳过导出，MySQL 将从空数据库开始"
+            echo "✓ 未发现 SQLite 数据库，MySQL 将从空数据库开始"
         fi
-    elif [ -f "$MYSQL_SQL" ]; then
-        echo "✅ 找到 MySQL 迁移文件: $MYSQL_SQL"
-        echo "   Docker 启动后将自动导入数据"
-    else
-        echo "✓ 未发现 SQLite 数据库，MySQL 将从空数据库开始"
-    fi
-else
-    echo "✓ 使用 SQLite 数据库，无需迁移"
-fi
+        ;;
+    
+    mariadb)
+        echo "ℹ️  检测到使用 MariaDB 数据库"
+        
+        # 检查 SQLite 数据库是否存在
+        SQLITE_DB="web/data/app.db"
+        MARIADB_SQL="web/data/mariadb.sql"
+        
+        if [ -f "$SQLITE_DB" ] && [ ! -f "$MARIADB_SQL" ]; then
+            echo "⚠️  发现 SQLite 数据库，但未找到 MariaDB 迁移文件"
+            echo "   是否现在导出为 SQL 文件？"
+            read -p "   执行导出？[y/N]: " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo "🔄 开始导出数据..."
+                
+                # 执行导出脚本
+                if python3 migrate_sqlite_to_mysql.py export --output "$MARIADB_SQL"; then
+                    echo "✅ 数据导出成功: $MARIADB_SQL"
+                else
+                    echo "❌ 数据导出失败"
+                    exit 1
+                fi
+            else
+                echo "ℹ️  跳过导出，MariaDB 将从空数据库开始"
+            fi
+        elif [ -f "$MARIADB_SQL" ]; then
+            echo "✅ 找到 MariaDB 迁移文件: $MARIADB_SQL"
+            echo "   Docker 启动后将自动导入数据"
+        else
+            echo "✓ 未发现 SQLite 数据库，MariaDB 将从空数据库开始"
+        fi
+        ;;
+    
+    postgresql|postgres|pg)
+        echo "ℹ️  检测到使用 PostgreSQL 数据库"
+        
+        POSTGRESQL_SQL="web/data/postgresql.sql"
+        if [ -f "$POSTGRESQL_SQL" ]; then
+            echo "✅ 找到 PostgreSQL 初始化文件: $POSTGRESQL_SQL"
+            echo "   Docker 启动后将自动导入数据"
+        else
+            echo "⚠️  未找到 PostgreSQL 初始化文件"
+            echo "   请确保 web/data/postgresql.sql 存在"
+        fi
+        ;;
+    
+    sqlite)
+        echo "✓ 使用 SQLite 数据库，无需迁移"
+        ;;
+    
+    *)
+        echo "⚠️  未知的数据库类型: $DATABASE_TYPE"
+        ;;
+esac
 
 echo ""
 
-# 4. 停止旧服务（如果存在）
+# 4. 停止旧服务并清理其他数据库容器
 echo "[4/7] 检查并停止旧服务..."
 cd docker
+
+# 4.1 停止当前配置的服务
+echo "🔄 停止当前配置的服务..."
 if docker compose ps --services 2>/dev/null | grep -q .; then
-    echo "⚠️  检测到正在运行的服务，正在停止..."
     docker compose down
-    echo "✓ 旧服务已停止"
+    echo "✓ 当前服务已停止"
 else
     echo "✓ 没有运行中的服务"
 fi
+
+# 4.2 清理其他数据库类型的容器（防止切换数据库类型后残留）
+echo "🧹 清理可能存在的其他数据库容器..."
+DB_CONTAINERS_TO_REMOVE=()
+
+case "$DATABASE_TYPE" in
+    mysql)
+        # 如果使用 MySQL，清理 MariaDB 和 PostgreSQL 容器
+        DB_CONTAINERS_TO_REMOVE=("doculogic-mariadb" "doculogic-postgresql")
+        ;;
+    mariadb)
+        # 如果使用 MariaDB，清理 MySQL 和 PostgreSQL 容器
+        DB_CONTAINERS_TO_REMOVE=("doculogic-mysql" "doculogic-postgresql")
+        ;;
+    postgresql|postgres|pg)
+        # 如果使用 PostgreSQL，清理 MySQL 和 MariaDB 容器
+        DB_CONTAINERS_TO_REMOVE=("doculogic-mysql" "doculogic-mariadb")
+        ;;
+    sqlite)
+        # 如果使用 SQLite，清理所有数据库容器（保留 Redis）
+        DB_CONTAINERS_TO_REMOVE=("doculogic-mysql" "doculogic-mariadb" "doculogic-postgresql")
+        ;;
+esac
+
+# 检查并移除容器
+REMOVED_COUNT=0
+for container_name in "${DB_CONTAINERS_TO_REMOVE[@]}"; do
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+        echo "   🗑️  发现残留容器: ${container_name}，正在移除..."
+        docker rm -f "${container_name}" > /dev/null 2>&1
+        REMOVED_COUNT=$((REMOVED_COUNT + 1))
+    fi
+done
+
+if [ $REMOVED_COUNT -gt 0 ]; then
+    echo "✓ 已清理 ${REMOVED_COUNT} 个残留容器"
+else
+    echo "✓ 无需清理的残留容器"
+fi
+
 cd ..
 echo ""
 
@@ -222,9 +318,13 @@ export DATABASE_TYPE="${DATABASE_TYPE:-sqlite}"
 # 🎯 根据 DATABASE_TYPE 自动选择 Docker Compose profiles
 COMPOSE_PROFILES=""
 case "$DATABASE_TYPE" in
-    mysql|mariadb)
+    mysql)
         COMPOSE_PROFILES="mysql"
-        echo "📊 检测到使用 $DATABASE_TYPE 数据库，启用 MySQL 服务"
+        echo "📊 检测到使用 MySQL 数据库，启用 MySQL 服务"
+        ;;
+    mariadb)
+        COMPOSE_PROFILES="mariadb"
+        echo "📊 检测到使用 MariaDB 数据库，启用 MariaDB 服务"
         ;;
     postgresql|postgres|pg)
         COMPOSE_PROFILES="postgresql"
@@ -290,8 +390,11 @@ echo "  - redis          # Redis缓存服务"
 
 # 根据 DATABASE_TYPE 显示对应的数据库服务
 case "$DATABASE_TYPE" in
-    mysql|mariadb)
-        echo "  - mysql          # MySQL/MariaDB 数据库"
+    mysql)
+        echo "  - mysql          # MySQL 数据库"
+        ;;
+    mariadb)
+        echo "  - mariadb        # MariaDB 数据库"
         ;;
     postgresql|postgres|pg)
         echo "  - postgresql     # PostgreSQL 数据库"
@@ -310,9 +413,13 @@ echo "  Redis CLI:  docker exec -it doculogic-redis redis-cli"
 
 # 根据 DATABASE_TYPE 显示对应的数据库管理命令
 case "$DATABASE_TYPE" in
-    mysql|mariadb)
-        echo "  MySQL CLI:    docker exec -it doculogic-mysql mysql -uroot -p"
-        echo "  MySQL Backup: docker exec doculogic-mysql mysqldump -uroot -p doculogic > backup.sql"
+    mysql)
+        echo "  MySQL CLI:      docker exec -it doculogic-mysql mysql -uroot -p"
+        echo "  MySQL Backup:   docker exec doculogic-mysql mysqldump -uroot -p doculogic > backup.sql"
+        ;;
+    mariadb)
+        echo "  MariaDB CLI:    docker exec -it doculogic-mariadb mariadb -uroot -p"
+        echo "  MariaDB Backup: docker exec doculogic-mariadb mariadb-dump -uroot -p doculogic > backup.sql"
         ;;
     postgresql|postgres|pg)
         echo "  PostgreSQL CLI: docker exec -it doculogic-postgresql psql -U postgres -d doculogic"

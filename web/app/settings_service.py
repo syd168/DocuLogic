@@ -269,6 +269,30 @@ def get_max_upload_size_mb(db: Optional[Session] = None) -> int:
             db.close()
 
 
+def get_allow_multi_file_upload(db: Optional[Session] = None) -> bool:
+    """
+    获取是否允许多文件上传配置
+    
+    Args:
+        db: 数据库会话（可选，如不提供则创建临时会话）
+        
+    Returns:
+        是否允许一次选择多个文件上传
+    """
+    close = False
+    if db is None:
+        from .database import SessionLocal
+
+        db = SessionLocal()
+        close = True
+    try:
+        row = get_app_settings_row(db)
+        return bool(getattr(row, "allow_multi_file_upload", True))
+    finally:
+        if close:
+            db.close()
+
+
 def get_nginx_max_body_size_mb() -> int:
     """
     从环境变量读取 Nginx 的 client_max_body_size 配置（MB）
@@ -296,6 +320,21 @@ def get_nginx_max_body_size_mb() -> int:
             return int(nginx_size_str) // (1024 * 1024)
         except ValueError:
             return 55  # 默认值
+
+
+def get_max_upload_size_limit() -> int:
+    """
+    获取后端允许的最大上传大小限制（MB）
+    
+    优先级：环境变量 MAX_UPLOAD_SIZE_MB > 默认值 500
+    
+    Returns:
+        最大上传大小（MB）
+    """
+    try:
+        return max(1, int(os.environ.get("MAX_UPLOAD_SIZE_MB", "500")))
+    except (ValueError, TypeError):
+        return 500
 
 
 def validate_upload_size_config(backend_mb: int) -> dict:
@@ -519,7 +558,8 @@ def settings_to_admin_dict(db: Session) -> dict[str, Any]:
         "password_require_digit": bool(getattr(row, "password_require_digit", True)),
         "password_require_special": bool(getattr(row, "password_require_special", False)),
         # 文件上传限制
-        "max_upload_size_mb": max(1, min(500, int(getattr(row, "max_upload_size_mb", 50) or 50))),
+        "max_upload_size_mb": max(1, min(get_max_upload_size_limit(), int(getattr(row, "max_upload_size_mb", 50) or 50))),
+        "allow_multi_file_upload": bool(getattr(row, "allow_multi_file_upload", True)),
         # Nginx 配置信息（只读）
         "nginx_max_body_size_mb": get_nginx_max_body_size_mb(),
     }
@@ -642,6 +682,13 @@ def update_settings_from_body(db: Session, body: dict[str, Any]) -> dict[str, An
         row.password_require_digit = bool(body["password_require_digit"])
     if "password_require_special" in body:
         row.password_require_special = bool(body["password_require_special"])
+
+    # 文件上传限制
+    if "max_upload_size_mb" in body:
+        max_limit = get_max_upload_size_limit()
+        row.max_upload_size_mb = max(1, min(max_limit, int(body["max_upload_size_mb"])))
+    if "allow_multi_file_upload" in body:
+        row.allow_multi_file_upload = bool(body["allow_multi_file_upload"])
 
     row.updated_at = datetime.utcnow()
     db.commit()

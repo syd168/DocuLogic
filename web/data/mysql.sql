@@ -39,7 +39,7 @@ CREATE TABLE `verification_codes` (
   `code_hash` LONGTEXT NOT NULL,
   `expires_at` DATETIME NOT NULL,
   `created_at` DATETIME NOT NULL,
-  `purpose` LONGTEXT DEFAULT ''register'',
+  `purpose` LONGTEXT DEFAULT 'register',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -50,7 +50,7 @@ CREATE TABLE `parse_jobs` (
   `job_id` LONGTEXT NOT NULL,
   `user_id` INT NOT NULL,
   `created_at` DATETIME NOT NULL,
-  `status` LONGTEXT DEFAULT ''processing'',
+  `status` LONGTEXT DEFAULT 'processing',
   `original_filename` LONGTEXT,
   `completed_at` DATETIME,
   `cache_cleared_at` DATETIME,
@@ -102,7 +102,7 @@ CREATE TABLE `app_settings` (
   `sms_http_headers_json` LONGTEXT,
   `sms_http_body_template` LONGTEXT,
   `show_page_numbers` TINYINT(1) DEFAULT '1',
-  `image_output_mode` LONGTEXT DEFAULT ''base64'',
+  `image_output_mode` LONGTEXT DEFAULT 'base64',
   `stale_job_timeout_minutes` INT NOT NULL DEFAULT '10',
   `login_timeout_minutes` INT DEFAULT '10',
   `password_min_length` INT DEFAULT '8',
@@ -110,12 +110,14 @@ CREATE TABLE `app_settings` (
   `password_require_lowercase` TINYINT(1) DEFAULT '1',
   `password_require_digit` TINYINT(1) DEFAULT '1',
   `password_require_special` TINYINT(1) DEFAULT '0',
+  `max_upload_size_mb` INT DEFAULT '50',
+  `allow_multi_file_upload` TINYINT(1) DEFAULT '1',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 数据: app_settings (1 行)
-INSERT INTO `app_settings` (`id`, `registration_enabled`, `captcha_login_enabled`, `captcha_register_enabled`, `captcha_forgot_enabled`, `pdf_max_pages`, `output_dir`, `model_local_path`, `hf_repo_id`, `ms_repo_id`, `updated_at`, `email_mock`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_password`, `smtp_from`, `smtp_use_tls`, `register_email_enabled`, `register_phone_enabled`, `login_email_enabled`, `login_phone_enabled`, `forgot_email_enabled`, `forgot_phone_enabled`, `sms_mock`, `sms_http_url`, `sms_http_secret`, `sms_http_headers_json`, `sms_http_body_template`, `show_page_numbers`, `image_output_mode`, `stale_job_timeout_minutes`, `login_timeout_minutes`, `password_min_length`, `password_require_uppercase`, `password_require_lowercase`, `password_require_digit`, `password_require_special`) VALUES
-  (1, 1, 0, 0, 0, 80, NULL, 'weights', 'Logics-MLLM/Logics-Parsing-v2', 'Alibaba-DT/Logics-Parsing-v2', '2026-04-06 23:23:54.430954', 1, NULL, 587, NULL, NULL, NULL, 1, 1, 1, 1, 1, 1, 1, 1, NULL, NULL, NULL, NULL, 0, 'separate', 10, 10, 8, 0, 1, 1, 0);
+INSERT INTO `app_settings` (`id`, `registration_enabled`, `captcha_login_enabled`, `captcha_register_enabled`, `captcha_forgot_enabled`, `pdf_max_pages`, `output_dir`, `model_local_path`, `hf_repo_id`, `ms_repo_id`, `updated_at`, `email_mock`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_password`, `smtp_from`, `smtp_use_tls`, `register_email_enabled`, `register_phone_enabled`, `login_email_enabled`, `login_phone_enabled`, `forgot_email_enabled`, `forgot_phone_enabled`, `sms_mock`, `sms_http_url`, `sms_http_secret`, `sms_http_headers_json`, `sms_http_body_template`, `show_page_numbers`, `image_output_mode`, `stale_job_timeout_minutes`, `login_timeout_minutes`, `password_min_length`, `password_require_uppercase`, `password_require_lowercase`, `password_require_digit`, `password_require_special`, `max_upload_size_mb`, `allow_multi_file_upload`) VALUES
+  (1, 1, 0, 0, 0, 80, NULL, 'weights', 'Logics-MLLM/Logics-Parsing-v2', 'Alibaba-DT/Logics-Parsing-v2', '2026-04-06 23:23:54.430954', 1, NULL, 587, NULL, NULL, NULL, 1, 1, 1, 1, 1, 1, 1, 1, NULL, NULL, NULL, NULL, 0, 'separate', 10, 10, 8, 0, 1, 1, 0, 50, 1);
 
 
 SET FOREIGN_KEY_CHECKS = 1;

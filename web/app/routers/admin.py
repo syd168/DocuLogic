@@ -86,6 +86,9 @@ class AdminSettingsBody(BaseModel):
     password_require_lowercase: Optional[bool] = None
     password_require_digit: Optional[bool] = None
     password_require_special: Optional[bool] = None
+    # 文件上传限制
+    max_upload_size_mb: Optional[int] = None
+    allow_multi_file_upload: Optional[bool] = None
 
 
 class ModelDownloadBody(BaseModel):

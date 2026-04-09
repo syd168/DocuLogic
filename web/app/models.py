@@ -159,3 +159,6 @@ class AppSettings(Base):
     
     # 文件上传限制（MB）
     max_upload_size_mb: Mapped[int] = mapped_column(Integer, default=50)  # 最大上传文件大小（MB）
+    
+    # 是否允许多文件上传（一次可选择多个文件）
+    allow_multi_file_upload: Mapped[bool] = mapped_column(Boolean, default=True)  # 是否允许一次选择多个文件上传

@@ -159,12 +159,59 @@ services:
     # 数据持久化
     volumes:
       - ${DATA_DIR:-~/doculogic/data}/mysql:/var/lib/mysql
-      # 挂载初始化脚本
+      # 挂载初始化脚本（首次启动时自动执行）
       - ../web/data/mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro
     
     # 健康检查
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD:-doculogic_secure_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    
+    # 资源限制
+    mem_limit: 2g
+    cpus: 2.0
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - doculogic-network
+
+  # MariaDB 数据库服务（可选，当 DATABASE_TYPE=mariadb 时启用）
+  mariadb:
+    image: mariadb:10.11
+    container_name: doculogic-mariadb
+    restart: unless-stopped
+    profiles:
+      - mariadb  # 使用 --profile mariadb 启用
+    command: >
+      mysqld
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    
+    # 环境变量
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
+      MARIADB_DATABASE: ${MYSQL_DATABASE:-doculogic}
+      MARIADB_USER: ${MYSQL_APP_USER:-doculogic}
+      MARIADB_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
+    
+    # 数据持久化
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/mariadb:/var/lib/mysql
+      # 挂载初始化脚本（首次启动时自动执行）
+      - ../web/data/mariadb.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -206,6 +253,8 @@ services:
     # 数据持久化
     volumes:
       - ${DATA_DIR:-~/doculogic/data}/postgresql:/var/lib/postgresql/data
+      # 挂载初始化脚本（首次启动时自动执行）
+      - ../web/data/postgresql.sql:/docker-entrypoint-initdb.d/init.sql:ro
     
     # 健康检查
     healthcheck:

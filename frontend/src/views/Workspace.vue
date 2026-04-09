@@ -73,8 +73,11 @@
               </h1>
             </div>
             <div class="parse-page-intro">
-              <p class="parse-page-lead">
+              <p class="parse-page-lead" v-if="adminForm.allow_multi_file_upload">
                 添加图片或 PDF，支持多选与多次添加；解析前可从队列移除或清空。按顺序逐个处理，每个文件一条生成记录，进行中可停止。
+              </p>
+              <p class="parse-page-note" v-else>
+                添加图片或 PDF，但仅支持上传一个文件，即一个文件一条生成记录，进行中可选择停止。
               </p>
               <div class="parse-formats">
                 <span class="parse-formats-label">支持格式</span>
@@ -110,12 +113,16 @@
                 ref="fileInput"
                 type="file"
                 class="hidden-file"
-                multiple
+                :multiple="adminForm.allow_multi_file_upload"
                 accept=".png,.jpg,.jpeg,.bmp,.tiff,.webp,.pdf,image/*,application/pdf"
                 @change="onFilePick"
               />
               <div class="upload-icon" aria-hidden="true">📄</div>
-              <div class="upload-hint">将文件拖到此处，或 <em>点击选择</em>（可多选，可多次添加）</div>
+              <div class="upload-hint">
+                将文件拖到此处，或 <em>点击选择</em>
+                <span v-if="adminForm.allow_multi_file_upload">（可多选，可多次添加）</span>
+                <span v-else>（每次只能选择一个文件）</span>
+              </div>
               <div class="file-meta">{{ fileLabel }}</div>
             </div>
 
@@ -177,9 +184,9 @@
                       class="parse-prompt-pick"
                       @click="setParsePromptExample('请识别图像中的文字与版面结构，输出为 HTML。')"
                     >
-                      中文任务说明
+                      任务说明
                     </button>
-                    <span class="muted">用中文明确「识别什么、输出什么」，可在默认效果不理想时尝试。</span>
+                    <span class="muted">明确「识别什么、输出什么」，可在默认效果不理想时尝试。</span>
                   </li>
                 </ul>
               </details>
@@ -368,7 +375,7 @@
                     <el-collapse v-model="activeSecurityPanels" class="settings-accordion">
                       
                       <!-- 基础 -->
-                      <el-collapse-item name="basic" title="基础">
+                      <el-collapse-item name="basic" title="🔐 基础">
                         <div class="accordion-panel-content">
                           <el-form-item>
                             <template #label>
@@ -386,7 +393,7 @@
                       </el-collapse-item>
 
                       <!-- 图形验证码 -->
-                      <el-collapse-item name="captcha" title="图形验证码">
+                      <el-collapse-item name="captcha" title="🛡️ 图形验证码">
                         <div class="accordion-panel-content">
                           <el-form-item>
                             <template #label>
@@ -430,10 +437,10 @@
                       </el-collapse-item>
 
                       <!-- 注册 / 登录 / 找回 -->
-                      <el-collapse-item name="auth_methods" title="注册 / 登录 / 找回">
+                      <el-collapse-item name="auth_methods" title="👤 注册 / 登录 / 找回">
                         <template #title>
                           <div class="accordion-title">
-                            <span>注册 / 登录 / 找回</span>
+                            <span>👤 注册 / 登录 / 找回</span>
                             <el-tooltip placement="top" :show-after="300" effect="dark">
                               <template #content>
                                 <div class="settings-tooltip-block">
@@ -526,7 +533,7 @@
                       </el-collapse-item>
 
                       <!-- 解析限制 -->
-                      <el-collapse-item name="parse_limits" title="解析限制">
+                      <el-collapse-item name="parse_limits" title="⚙️ 解析限制">
                         <div class="accordion-panel-content">
                           <el-form-item>
                             <template #label>
@@ -580,7 +587,7 @@
                       </el-collapse-item>
 
                       <!-- 任务管理 -->
-                      <el-collapse-item name="task_management" title="任务管理">
+                      <el-collapse-item name="task_management" title="⏱️ 任务管理">
                         <div class="accordion-panel-content">
                           <el-form-item>
                             <template #label>
@@ -614,7 +621,7 @@
                       </el-collapse-item>
 
                       <!-- 密码规则 -->
-                      <el-collapse-item name="password_rules" title="密码规则">
+                      <el-collapse-item name="password_rules" title="🔑 密码规则">
                         <div class="accordion-panel-content">
                           <el-alert type="info" :closable="false" style="margin-bottom: 16px">
                             <template #default>
@@ -724,6 +731,21 @@
                               style="width: 200px"
                             />
                             <span style="margin-left: 10px; color: var(--text-muted);">MB（范围：1-500）</span>
+                          </el-form-item>
+
+                          <el-form-item class="settings-form-item-switch">
+                            <template #label>
+                              <span class="settings-label-with-tip">允许多文件上传</span>
+                              <el-tooltip placement="top" :show-after="300" effect="dark">
+                                <template #content>
+                                  <div class="settings-tooltip-block">
+                                    开启后，用户可一次选择多个文件上传；关闭后，每次只能选择一个文件。
+                                  </div>
+                                </template>
+                                <span class="settings-help-trigger" aria-label="说明">?</span>
+                              </el-tooltip>
+                            </template>
+                            <el-switch v-model="adminForm.allow_multi_file_upload" />
                           </el-form-item>
 
                           <!-- 实时验证提示 -->
@@ -2119,6 +2141,27 @@ function addFilesToQueue(fileList) {
     if (fileList && fileList.length) ElMessage.warning('没有可添加的文件（仅支持图片或 PDF）')
     return
   }
+  
+  // 如果禁止多文件上传，新文件替换队列中的文件
+  if (!adminForm.allow_multi_file_upload) {
+    // 只取第一个文件
+    const file = arr[0]
+    parseQueue.value = []  // 清空队列
+    const row = { id: generateUUID(), file }
+    if (/\.pdf$/i.test(file.name)) {
+      row.pdfNumPages = undefined
+      loadPdfNumPagesForQueueItem(row)
+    }
+    parseQueue.value = [row]
+    parseErr.value = ''
+    showResult.value = false
+    showProgress.value = false
+    clampPdfPagesRequested()
+    ElMessage.info('已替换当前文件')
+    return
+  }
+  
+  // 允许多文件上传：添加到队列末尾
   const existing = new Set(parseQueue.value.map((x) => parseQueueFileKey(x.file)))
   const seenThisPick = new Set()
   const newFiles = []
@@ -2234,6 +2277,7 @@ const adminForm = reactive({
   password_require_special: false,
   // 文件上传限制
   max_upload_size_mb: 50,
+  allow_multi_file_upload: true,
 })
 
 /** Chromium 等支持 File System Access API；Firefox/Safari 通常无 showDirectoryPicker */
@@ -2652,6 +2696,7 @@ async function loadSettings() {
       adminForm.password_require_special = !!a.password_require_special
       // 文件上传限制
       adminForm.max_upload_size_mb = a.max_upload_size_mb ?? 50
+      adminForm.allow_multi_file_upload = a.allow_multi_file_upload !== false
       // Nginx 配置信息（只读）
       nginxConfig.max_body_size_mb = a.nginx_max_body_size_mb ?? 55
       effectivePaths.output = a.effective_output_dir || ''
@@ -2675,8 +2720,59 @@ async function saveAdminSettings() {
     if (!payload.sms_http_secret || !String(payload.sms_http_secret).trim()) {
       delete payload.sms_http_secret
     }
-    await http.put('/api/admin/settings', payload)
-    await loadSettings()
+    
+    // 发送更新请求，并获取返回的最新配置
+    const { data: updatedSettings } = await http.put('/api/admin/settings', payload)
+    
+    // 直接使用 API 返回的数据更新 adminForm，避免重新加载导致的延迟或缓存问题
+    if (updatedSettings) {
+      adminForm.registration_enabled = updatedSettings.registration_enabled !== false
+      adminForm.captcha_login_enabled = !!updatedSettings.captcha_login_enabled
+      adminForm.captcha_register_enabled = !!updatedSettings.captcha_register_enabled
+      adminForm.captcha_forgot_enabled = !!updatedSettings.captcha_forgot_enabled
+      adminForm.pdf_max_pages = updatedSettings.pdf_max_pages || 80
+      adminForm.output_dir = updatedSettings.output_dir ?? ''
+      adminForm.model_local_path = updatedSettings.model_local_path ?? ''
+      adminForm.hf_repo_id = updatedSettings.hf_repo_id || ''
+      adminForm.ms_repo_id = updatedSettings.ms_repo_id || ''
+      adminForm.email_mock = updatedSettings.email_mock !== false
+      adminForm.smtp_host = updatedSettings.smtp_host ?? ''
+      adminForm.smtp_port = updatedSettings.smtp_port ?? 587
+      adminForm.smtp_user = updatedSettings.smtp_user ?? ''
+      adminForm.smtp_from = updatedSettings.smtp_from ?? ''
+      // smtp_password 不更新，保持为空
+      adminForm.smtp_use_tls = updatedSettings.smtp_use_tls !== false
+      adminForm.smtp_password_configured = !!updatedSettings.smtp_password_configured
+      adminForm.register_email_enabled = updatedSettings.register_email_enabled !== false
+      adminForm.register_phone_enabled = updatedSettings.register_phone_enabled !== false
+      adminForm.login_email_enabled = updatedSettings.login_email_enabled !== false
+      adminForm.login_phone_enabled = updatedSettings.login_phone_enabled !== false
+      adminForm.forgot_email_enabled = updatedSettings.forgot_email_enabled !== false
+      adminForm.forgot_phone_enabled = updatedSettings.forgot_phone_enabled !== false
+      adminForm.sms_mock = updatedSettings.sms_mock !== false
+      adminForm.sms_http_url = updatedSettings.sms_http_url ?? ''
+      adminForm.sms_http_secret = ''
+      adminForm.sms_http_headers_json = updatedSettings.sms_http_headers_json ?? ''
+      adminForm.sms_http_body_template = updatedSettings.sms_http_body_template ?? ''
+      adminForm.sms_http_secret_configured = !!updatedSettings.sms_http_secret_configured
+      adminForm.show_page_numbers = updatedSettings.show_page_numbers !== false
+      adminForm.image_output_mode = updatedSettings.image_output_mode || 'base64'
+      adminForm.stale_job_timeout_minutes = updatedSettings.stale_job_timeout_minutes ?? 10
+      adminForm.login_timeout_minutes = updatedSettings.login_timeout_minutes ?? 10
+      adminForm.password_min_length = updatedSettings.password_min_length ?? 8
+      adminForm.password_require_uppercase = updatedSettings.password_require_uppercase !== false
+      adminForm.password_require_lowercase = updatedSettings.password_require_lowercase !== false
+      adminForm.password_require_digit = updatedSettings.password_require_digit !== false
+      adminForm.password_require_special = !!updatedSettings.password_require_special
+      // 文件上传限制 - 关键修复
+      adminForm.max_upload_size_mb = updatedSettings.max_upload_size_mb ?? 50
+      adminForm.allow_multi_file_upload = updatedSettings.allow_multi_file_upload !== false
+      // Nginx 配置信息（只读）
+      nginxConfig.max_body_size_mb = updatedSettings.nginx_max_body_size_mb ?? 55
+      effectivePaths.output = updatedSettings.effective_output_dir || ''
+      effectivePaths.model = updatedSettings.effective_model_path || ''
+    }
+    
     ElMessage.success('已保存')
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || e.message)
@@ -3578,6 +3674,9 @@ async function startParse() {
     return
   }
   
+  // 如果禁止多文件上传，只解析第一个文件
+  const filesToProcess = adminForm.allow_multi_file_upload ? queue : [queue[0]]
+  
   batchAbort.value = false
   parseErr.value = ''
   parseBatchResults.value = []
@@ -3589,14 +3688,14 @@ async function startParse() {
   progressPct.value = 0
   const p = prompt.value.trim()
   const results = []
-  const total = queue.length
+  const total = filesToProcess.length
   
   console.log('[调试] 开始处理', total, '个文件')
 
-  for (let i = 0; i < queue.length; i++) {
+  for (let i = 0; i < filesToProcess.length; i++) {
     if (batchAbort.value) break
     parseErr.value = ''
-    const item = queue[i]
+    const item = filesToProcess[i]
     const name = item.file.name
     progressMsg.value =
       total > 1 ? `（${i + 1}/${total}）${name}：正在上传…` : '正在上传文件…'
@@ -3643,7 +3742,12 @@ async function startParse() {
     if (lastOk) resultJobId.value = lastOk.job_id
   }
 
-  if (!batchAbort.value && results.length && results.every((r) => r.ok)) {
+  // 如果禁止多文件上传且解析成功，清空队列
+  if (!adminForm.allow_multi_file_upload && !batchAbort.value && results.length && results.every((r) => r.ok)) {
+    parseQueue.value = []
+    ElMessage.success('解析完成')
+  } else if (!batchAbort.value && results.length && results.every((r) => r.ok)) {
+    // 允许多文件上传且全部成功
     parseQueue.value = []
     ElMessage.success(`已完成 ${results.length} 个文件的解析`)
   } else if (batchAbort.value) {

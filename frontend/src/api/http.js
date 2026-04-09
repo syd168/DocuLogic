@@ -72,8 +72,8 @@ async function refreshToken() {
  * 
  * 功能：
  * - 检测 401 未授权错误
- * - 仅在访问需要认证的页面时跳转到登录页
- * - 其他错误直接抛出，由调用方处理
+ * - 区分 Token 过期和被踢下线
+ * - 显示友好提示后跳转到登录页
  */
 http.interceptors.response.use(
   response => response,  // 成功响应直接返回
@@ -90,8 +90,38 @@ http.interceptors.response.use(
       
       // 只有在需要认证的页面才跳转
       if (needsAuth && !window.location.pathname.includes('/login')) {
-        // 保留当前路径，登录后可以返回
-        window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname)
+        // 尝试从错误信息中判断是否是被踢下线
+        const errorMsg = error.response?.data?.detail || ''
+        console.log('[401错误] 错误信息:', errorMsg)
+        
+        // 检测是否被踢下线（单点登录冲突或 Token 被撤销）
+        const isKickedOut = (
+          errorMsg.includes('其他终端') ||
+          errorMsg.includes('已被撤销') ||
+          errorMsg.includes('single_login') ||
+          errorMsg.includes('blacklist')
+        )
+        
+        console.log('[401错误] 是否被踢下线:', isKickedOut)
+        
+        // 保存跳转前的路径
+        const nextPath = encodeURIComponent(window.location.pathname)
+        
+        if (isKickedOut) {
+          // 被踢下线，显示提示（使用 confirm 让用户有机会点击确定）
+          const confirmed = confirm(
+            '⚠️ 账号安全提示\n\n' +
+            '您的账号已在其他设备登录，当前会话已被强制下线。\n\n' +
+            '如非本人操作，请立即修改密码！'
+          )
+          
+          // 无论用户是否点击确定，都跳转到登录页
+          window.location.href = '/login?next=' + nextPath
+          return Promise.reject(error)
+        }
+        
+        // 普通 401（Token 过期等），直接跳转
+        window.location.href = '/login?next=' + nextPath
       }
       // 否则静默失败，由调用方处理（如 Landing 页面的 /api/auth/me）
     }

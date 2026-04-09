@@ -9,7 +9,7 @@
 [![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.2.0-orange.svg)](https://github.com/your-username/DocuLogic/releases/tag/v2.2.0)
+[![Version](https://img.shields.io/badge/Version-2.3.0-orange.svg)](https://github.com/syd168/DocuLogic/releases)
 [![Security](https://img.shields.io/badge/Security-Audit%20Passed-brightgreen.svg)](doc/安全漏洞分析报告.md)
 
 [📖 简介](#-项目简介) • [🚀 快速开始](#-快速开始) • [📸 功能展示](#-功能展示) • [🏗️ 架构设计](#️-架构设计) • [📝 API 文档](#-api-文档)
@@ -74,7 +74,7 @@ DocuLogic（Document Logic）是一个企业级智能文档解析平台，基于
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/DocuLogic.git
+git clone https://github.com/syd168/DocuLogic.git
 cd DocuLogic
 
 # 2. 一键部署（自动完成所有步骤）
@@ -341,7 +341,7 @@ cd docker && docker compose up -d
 #### 1. 克隆项目
 
 ```bash
-git clone https://github.com/your-username/DocuLogic.git
+git clone https://github.com/syd168/DocuLogic.git
 cd DocuLogic
 ```
 
@@ -775,6 +775,33 @@ Logics-Parsing-v2 模型在多个基准测试中取得 SOTA 成绩：
 
 详细 benchmark 数据请参考 [logics-parsingv2/README.md](logics-parsingv2/README.md)
 
+## 🚀 v2.3.0 版本特性
+
+### ✨ 新增功能
+
+#### 1. **UI/UX 全面优化**
+- ✅ **首页图标动画统一**：所有 18 个图标都有独特的动态效果，悬停效果一致
+- ✅ **移除眩晕动画**：地球和齿轮改为温和的脉冲/弹跳效果，避免持续旋转
+- ✅ **文案精简优化**："输出与对接"部分文字更简洁有力，提升可读性
+- ✅ **按钮样式修复**：下载源选择按钮紧密排列，视觉更协调
+
+#### 2. **解析逻辑优化**
+- ✅ **单文件页数限制修正**：滑动条最大值使用单文件最大页数而非总页数
+- ✅ **提示信息更新**：Tooltip 和底部提示文本准确反映实际逻辑
+- ✅ **多文件进度显示**：清晰显示当前处理到第几个文件及文件名
+
+### 🔧 Bug 修复
+
+- 🐛 **修复上传 500 错误**：删除 `upload_document` 中 ParseJob 重复导入导致的 UnboundLocalError
+- 🐛 **修复配置保存问题**：确保前端状态更新后立即反映 UI 变化
+
+### 📝 文档改进
+
+- 📖 更新 README 中的 GitHub 链接为正式仓库地址
+- 📖 完善 API 文档和部署说明
+
+---
+
 ## 🚀 v2.2.0 版本特性
 
 ### ✨ 新增功能
@@ -1019,7 +1046,7 @@ Logics-Parsing-v2 模型在多个基准测试中取得 SOTA 成绩：
 
 ## 📧 联系方式
 
-- 项目主页：[GitHub Repository](https://github.com/your-username/Logics-Parsing-Web)
+- 项目主页：[GitHub Repository](https://github.com/syd168/DocuLogic)
 - 模型主页：[HuggingFace](https://huggingface.co/Logics-MLLM/Logics-Parsing-v2)
 - 在线演示：[ModelScope](https://www.modelscope.cn/studios/Alibaba-DT/Logics-Parsing/summary)
 
@@ -1099,4 +1126,4 @@ docker compose up -d --build
 
 Made with ❤️ by the DocuLogic Team
 
-[📄 Apache 2.0 License](LICENSE) • [🐛 报告问题](https://github.com/your-username/DocuLogic/issues) • [💡 提出建议](https://github.com/your-username/DocuLogic/issues)
+[📄 Apache 2.0 License](LICENSE) • [🐛 报告问题](https://github.com/syd168/DocuLogic/issues) • [💡 提出建议](https://github.com/syd168/DocuLogic/issues)

@@ -72,7 +72,7 @@ async function refreshToken() {
  * 
  * 功能：
  * - 检测 401 未授权错误
- * - 自动跳转到登录页，保留原页面路径作为 next 参数
+ * - 仅在访问需要认证的页面时跳转到登录页
  * - 其他错误直接抛出，由调用方处理
  */
 http.interceptors.response.use(
@@ -82,11 +82,18 @@ http.interceptors.response.use(
     
     // 处理 401 未授权错误
     if (error.response && error.response.status === 401) {
-      // 如果不是已经在登录页面，则跳转到登录页
-      if (!window.location.pathname.includes('/login')) {
+      // 检查当前页面是否需要认证
+      const needsAuth = [
+        '/app',
+        '/workspace',
+      ].some(path => window.location.pathname.startsWith(path))
+      
+      // 只有在需要认证的页面才跳转
+      if (needsAuth && !window.location.pathname.includes('/login')) {
         // 保留当前路径，登录后可以返回
         window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname)
       }
+      // 否则静默失败，由调用方处理（如 Landing 页面的 /api/auth/me）
     }
     
     return Promise.reject(error)  // 抛出错误，供调用方捕获

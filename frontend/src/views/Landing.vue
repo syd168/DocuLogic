@@ -37,28 +37,34 @@
       <p class="landing-sub">融合前沿 AI 技术与工程化实践，提供企业级文档解析能力。</p>
       <div class="features">
         <div class="feature">
-          <h3>🧠 Qwen3-VL 多模态理解</h3>
-          <p>基于最新的 Qwen3-VL 大模型，精准识别文本、表格、LaTeX 公式、Mermaid 流程图、ABC 记谱法、化学式（SMILES）、手写文本等复杂元素，支持 STEM 专业内容与复杂版面处理。</p>
+          <div class="feature-icon icon-brain">🧠</div>
+          <h3>Qwen3-VL 多模态理解</h3>
+          <p>精准识别文本、表格、公式、流程图、化学式等专业内容</p>
         </div>
         <div class="feature">
-          <h3>✂️ 智能图像裁剪</h3>
-          <p>根据 AI 输出的 bbox 坐标（归一化 0-1000），从原始页面<strong>像素级精确裁剪</strong>图片区域，支持任意分辨率，保证图像质量与位置准确性。</p>
+          <div class="feature-icon icon-crop">✂️</div>
+          <h3>智能图像裁剪</h3>
+          <p>像素级精确裁剪图片区域，支持任意分辨率</p>
         </div>
         <div class="feature">
-          <h3>🎨 三种输出模式</h3>
-          <p><strong>Base64 嵌入</strong>：单文件便携分享；<strong>独立文件（Separate）</strong>：图片单独保存至 assets/，Markdown 引用相对路径；<strong>不输出</strong>：仅保留文本内容。管理员可配置全局默认值，用户也可设置个人偏好。</p>
+          <div class="feature-icon icon-palette">🎨</div>
+          <h3>三种输出模式</h3>
+          <p>Base64 嵌入 / 独立文件 / 不输出，灵活配置</p>
         </div>
         <div class="feature">
-          <h3>📦 ZIP 打包与批量下载</h3>
-          <p>自动为每个任务生成完整 ZIP 包（含 Markdown、原始输出、可视化图与 assets）；支持<strong>批量选择多个任务一次性下载</strong>，提升工作效率。</p>
+          <div class="feature-icon icon-package">📦</div>
+          <h3>ZIP 打包与批量下载</h3>
+          <p>自动生成完整 ZIP 包，支持批量一键下载</p>
         </div>
         <div class="feature">
-          <h3>⚡ 实时进度与可控中断</h3>
-          <p>WebSocket 实时推送解析进度（每页更新），支持中途停止任务；PDF 按页处理，即使中断也会保存已生成的部分结果，避免资源浪费。</p>
+          <div class="feature-icon icon-bolt">⚡</div>
+          <h3>实时进度与可控中断</h3>
+          <p>WebSocket 实时推送，支持中途停止并保存结果</p>
         </div>
         <div class="feature">
-          <h3>🔐 企业级权限与安全</h3>
-          <p>JWT Token 认证、bcrypt 密码哈希、图形验证码、速率限制防护；管理员可配置注册策略、PDF 页数上限、僵尸任务超时等；普通用户可设置个人偏好；账号数据完全隔离，支持邮箱/手机双通道注册。</p>
+          <div class="feature-icon icon-shield">🔐</div>
+          <h3>企业级权限与安全</h3>
+          <p>JWT 认证、bcrypt 加密、速率限制、数据隔离</p>
         </div>
       </div>
     </section>
@@ -68,28 +74,34 @@
       <p class="landing-sub">现代化全栈设计，兼顾性能、安全与可扩展性。</p>
       <div class="features">
         <div class="feature">
-          <h3>🚀 高性能推理引擎</h3>
-          <p>基于 PyTorch + Transformers，支持 CUDA BF16 加速与 SDPA 注意力优化；单图异步推理，PDF 逐页串行处理，最大化 GPU 利用率；支持动态分辨率调整，OmniDocBench 总体得分 93.23。</p>
+          <div class="feature-icon icon-rocket">🚀</div>
+          <h3>高性能推理引擎</h3>
+          <p>CUDA BF16 加速 + SDPA 优化，OmniDocBench 得分 93.23</p>
         </div>
         <div class="feature">
-          <h3>🌐 FastAPI + Vue 3 前后端分离</h3>
-          <p>前端 Vue 3 Composition API + Element Plus + Vite；后端 FastAPI + SQLAlchemy 2.0；REST API + WebSocket 双通道通信，实时推送进度与状态。</p>
+          <div class="feature-icon icon-globe">🌐</div>
+          <h3>FastAPI + Vue 3</h3>
+          <p>前后端分离，REST API + WebSocket 双通道通信</p>
         </div>
         <div class="feature">
-          <h3>🗄️ MySQL/SQLite 灵活切换</h3>
-          <p>支持 SQLite（开发环境）和 MySQL（生产环境）无缝切换；Docker Compose 一键部署包含 Redis 缓存；文件输出目录可配置，支持挂载到网络存储或对象存储。</p>
+          <div class="feature-icon icon-database">🗄️</div>
+          <h3>MySQL/SQLite 灵活切换</h3>
+          <p>无缝切换数据库，Docker Compose 一键部署</p>
         </div>
         <div class="feature">
-          <h3>🔒 多层安全防护</h3>
-          <p>JWT Token 认证（HttpOnly Cookie）、bcrypt 密码哈希、图形验证码、SlowAPI 速率限制、SQL 注入防护、路径遍历检查；管理员可灵活配置注册策略与安全选项。</p>
+          <div class="feature-icon icon-lock">🔒</div>
+          <h3>多层安全防护</h3>
+          <p>JWT、bcrypt、验证码、速率限制、SQL 注入防护</p>
         </div>
         <div class="feature">
-          <h3>⚙️ 灵活配置管理</h3>
-          <p>环境变量与管理后台双重配置；模型路径、输出目录、PDF 页数上限、图片输出模式、僵尸任务超时等均可动态调整，适应不同部署环境。</p>
+          <div class="feature-icon icon-settings">⚙️</div>
+          <h3>灵活配置管理</h3>
+          <p>环境变量 + 管理后台双重配置，动态调整参数</p>
         </div>
         <div class="feature">
-          <h3>📊 完善的日志与监控</h3>
-          <p>详细的运行日志（logs/app.log）与错误追踪；任务状态实时监控，支持僵尸任务自动检测与恢复；生产环境可集成 Prometheus + Grafana 监控看板。</p>
+          <div class="feature-icon icon-chart">📊</div>
+          <h3>完善的日志与监控</h3>
+          <p>详细运行日志，僵尸任务自动检测与恢复</p>
         </div>
       </div>
     </section>
@@ -99,28 +111,34 @@
       <p class="landing-sub">适用于多种文档类型与业务场景，助力知识管理与自动化流程。</p>
       <div class="features">
         <div class="feature">
-          <h3>📚 学术研究与知识库构建</h3>
-          <p>将论文、研报中的图表、LaTeX 公式与摘要结构化为 Markdown，方便导入 Obsidian/Notion 等笔记软件、构建个人知识库或二次排版发表。</p>
+          <div class="feature-icon icon-book">📚</div>
+          <h3>学术研究与知识库</h3>
+          <p>论文明表结构化，导入 Obsidian/Notion</p>
         </div>
         <div class="feature">
-          <h3>💼 企业文档数字化</h3>
-          <p>对财报、合同、报表等扫描件进行结构化还原，提取表格数据与关键信息，减少手工录入成本；支持批量上传与一键下载，提升处理效率。</p>
+          <div class="feature-icon icon-briefcase">💼</div>
+          <h3>企业文档数字化</h3>
+          <p>财报合同扫描件还原，批量上传一键下载</p>
         </div>
         <div class="feature">
-          <h3>🎓 教育与培训资料整理</h3>
-          <p>课件截图、讲义 PDF 转为可编辑大纲与插图说明，便于复习资料整理、在线课程制作与知识分享；支持 Mermaid 流程图自动识别。</p>
+          <div class="feature-icon icon-graduation">🎓</div>
+          <h3>教育培训资料整理</h3>
+          <p>课件截图转大纲，Mermaid 流程图自动识别</p>
         </div>
         <div class="feature">
-          <h3>🏛️ 档案管理与合规存档</h3>
-          <p>批量处理票据、表单、档案类扫描件，统一结构化存档，支持全文检索与对接业务系统，满足审计与合规要求。</p>
+          <div class="feature-icon icon-archive">🏛️</div>
+          <h3>档案管理与合规</h3>
+          <p>票据表单批量处理，全文检索对接业务系统</p>
         </div>
         <div class="feature">
-          <h3>🔬 STEM 科研数据处理</h3>
-          <p>实验报告、研究数据、科学图表的自动化解析与结构化；特别支持化学式（SMILES）、数学公式、物理图表、生物图谱、乐谱等专业领域符号的精准识别。</p>
+          <div class="feature-icon icon-flask">🔬</div>
+          <h3>STEM 科研数据处理</h3>
+          <p>化学式、数学公式、物理图表精准识别</p>
         </div>
         <div class="feature">
-          <h3>📰 媒体内容管理与发布</h3>
-          <p>新闻稿件、杂志文章、宣传材料的快速数字化，支持多格式输出与 CMS 内容管理系统无缝集成，加速内容生产流程。</p>
+          <div class="feature-icon icon-newspaper">📰</div>
+          <h3>媒体内容管理</h3>
+          <p>新闻稿件快速数字化，CMS 无缝集成</p>
         </div>
       </div>
     </section>
@@ -542,6 +560,268 @@ onMounted(async () => {
   flex-direction: column;
   min-height: 200px; /* 增加最小高度 */
 }
+
+/* 特性图标样式 */
+.feature-icon {
+  font-size: 3.5rem;
+  margin-bottom: 16px;
+  display: inline-block;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+/* 不同图标的独特动画 */
+.icon-brain {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.icon-crop {
+  animation: rotate-slow 8s linear infinite;
+}
+
+.icon-palette {
+  animation: bounce 2s ease-in-out infinite;
+}
+
+.icon-package {
+  animation: slide-up-down 2.5s ease-in-out infinite;
+}
+
+.icon-bolt {
+  animation: flash 1.5s ease-in-out infinite;
+}
+
+.icon-shield {
+  animation: shield-pulse 2s ease-in-out infinite;
+}
+
+.icon-rocket {
+  animation: rocket-fly 3s ease-in-out infinite;
+}
+
+.icon-globe {
+  animation: spin 10s linear infinite;
+}
+
+.icon-database {
+  animation: database-pulse 2s ease-in-out infinite;
+}
+
+.icon-lock {
+  animation: lock-shake 3s ease-in-out infinite;
+}
+
+.icon-settings {
+  animation: settings-rotate 6s linear infinite;
+}
+
+.icon-chart {
+  animation: chart-grow 2s ease-in-out infinite;
+}
+
+.icon-book {
+  animation: book-flip 3s ease-in-out infinite;
+}
+
+.icon-briefcase {
+  animation: briefcase-swing 2.5s ease-in-out infinite;
+}
+
+.icon-graduation {
+  animation: graduation-bounce 2s ease-in-out infinite;
+}
+
+.icon-archive {
+  animation: archive-slide 3s ease-in-out infinite;
+}
+
+.icon-flask {
+  animation: flask-bubble 2s ease-in-out infinite;
+}
+
+.icon-newspaper {
+  animation: newspaper-flutter 2.5s ease-in-out infinite;
+}
+
+/* 图标悬停效果 */
+.feature:hover .feature-icon {
+  transform: scale(1.2) translateY(-8px);
+  filter: drop-shadow(0 8px 16px rgba(99, 102, 241, 0.4));
+}
+
+/* 各种动画关键帧 */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes rotate-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes slide-up-down {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes flash {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes shield-pulse {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.08) rotate(5deg);
+  }
+}
+
+@keyframes rocket-fly {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-8px) rotate(-5deg);
+  }
+  75% {
+    transform: translateY(-4px) rotate(5deg);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes database-pulse {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.1);
+  }
+}
+
+@keyframes lock-shake {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: rotate(-5deg);
+  }
+  20%, 40%, 60%, 80% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes settings-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes chart-grow {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.15);
+  }
+}
+
+@keyframes book-flip {
+  0%, 100% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(15deg);
+  }
+}
+
+@keyframes briefcase-swing {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-8deg);
+  }
+  75% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes graduation-bounce {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(10deg);
+  }
+}
+
+@keyframes archive-slide {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(8px);
+  }
+}
+
+@keyframes flask-bubble {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(-10deg);
+  }
+}
+
+@keyframes newspaper-flutter {
+  0%, 100% {
+    transform: skewX(0deg);
+  }
+  50% {
+    transform: skewX(5deg);
+  }
+}
 .feature::before {
   content: '';
   position: absolute;
@@ -573,7 +853,7 @@ onMounted(async () => {
   transition: transform 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0; /* 移除 gap，因为图标已独立 */
 }
 .feature:hover h3 {
   transform: translateX(4px);

@@ -88,7 +88,7 @@
                 </div>
               </div>
               <p class="parse-page-note muted">
-                PDF 按页解析，页数受账号上限约束；可在下方滑动条指定本次解析页数。
+                PDF 按页解析，每个文件最多解析页数受账号上限约束；可在下方滑动条指定单个文件的解析页数。
                 <span v-if="pdfPageCountLoading" style="color: #e6a23c; font-weight: 500;">（正在读取 PDF 页数…）</span>
               </p>
               <details class="parse-page-details">
@@ -187,7 +187,7 @@
 
             <div v-show="hasQueue" class="field pdf-pages-field">
               <div class="pdf-pages-header">
-                <span class="pdf-pages-label">📄 解析页数</span>
+                <span class="pdf-pages-label">📄 单个文件解析页数</span>
                 <el-tooltip placement="top" effect="dark">
                   <template #content>
                     <div style="max-width: 320px; line-height: 1.6;">
@@ -328,7 +328,7 @@
             <div class="settings-summary">
               <h3 class="settings-h3">当前生效摘要</h3>
               <el-descriptions :column="1" border size="small" class="settings-desc">
-                <el-descriptions-item label="PDF 解析页数上限">
+                <el-descriptions-item label="单个文件最大解析页数">
                   <template v-if="settingsSummary.is_admin">
                     <span>无限制</span>
                     <span class="muted">（系统全局上限 {{ settingsSummary.pdf_max_pages_global }}）</span>
@@ -530,10 +530,10 @@
                         <div class="accordion-panel-content">
                           <el-form-item>
                             <template #label>
-                              <span class="settings-label-with-tip">单次最大解析页数</span>
+                              <span class="settings-label-with-tip">单个文件最大解析页数</span>
                               <el-tooltip placement="top" :show-after="300" effect="dark">
                                 <template #content>
-                                  <div class="settings-tooltip-block">单份 PDF 解析时允许的最大页数上限。</div>
+                                  <div class="settings-tooltip-block">单个 PDF 文件解析时允许的最大页数上限。多个文件上传时，每个文件单独计算。</div>
                                 </template>
                                 <span class="settings-help-trigger" aria-label="说明">?</span>
                               </el-tooltip>
@@ -1204,7 +1204,7 @@
             <div class="profile-section">
               <h3 class="profile-section-title">📊 使用配额</h3>
               <el-descriptions :column="1" border size="default" class="profile-quota">
-                <el-descriptions-item label="PDF 解析页数上限">
+                <el-descriptions-item label="单个文件最大解析页数">
                   <template v-if="userProfile.is_admin">
                     <el-tag type="success" size="small">无限制</el-tag>
                     <span class="muted" style="margin-left: 8px;">（管理员特权）</span>
@@ -1338,7 +1338,7 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="original_filename" label="文件" min-width="200" show-overflow-tooltip />
-                <el-table-column label="解析页数" min-width="90" align="center">
+                <el-table-column label="单个文件解析页数" min-width="90" align="center">
                   <template #default="{ row }">
                     <span v-if="row.pages_parsed != null">{{ row.pages_parsed }}</span>
                     <span v-else class="muted">—</span>
@@ -1457,7 +1457,7 @@
               </h1>
             </div>
             <p class="lead">
-              搜索用户名或邮箱；可修改普通用户的启用状态、角色与密码。表格中不可勾选管理员账号，故批量操作仅针对普通用户。批量设置解析页数、批量删除前均会弹出警告或确认。删除用户将同时删除其解析任务记录且不可恢复。
+              搜索用户名或邮箱；可修改普通用户的启用状态、角色与密码。表格中不可勾选管理员账号，故批量操作仅针对普通用户。批量设置单个文件解析页数上限、批量删除前均会弹出警告或确认。删除用户将同时删除其解析任务记录且不可恢复。
             </p>
             <div class="records-toolbar">
               <el-input v-model="userSearchQ" clearable placeholder="用户名 / 邮箱" style="max-width: 280px"
@@ -1483,7 +1483,7 @@
               </el-button>
               <el-button type="primary" plain :disabled="!usersSelection.length || usersBatchLoading"
                 :loading="usersBatchLoading" @click="openBatchPdfDialog">
-                批量设置解析页数上限
+                批量设置单个文件解析页数上限
               </el-button>
               <el-button type="danger" plain :disabled="!usersSelection.length || usersBatchLoading"
                 :loading="usersBatchLoading" @click="batchUsersDelete">
@@ -1519,7 +1519,7 @@
                 <el-table-column prop="created_at" label="注册时间" min-width="160">
                   <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
                 </el-table-column>
-                <el-table-column label="可解析页数" min-width="160" align="center">
+                <el-table-column label="单个文件可解析页数" min-width="160" align="center">
                   <template #default="{ row }">
                     <template v-if="row.is_admin">
                       <span class="muted">无限制</span>
@@ -1614,7 +1614,7 @@
               <el-input v-model="userEditForm.new_password" type="password" show-password autocomplete="new-password"
                 placeholder="至少 8 位" />
             </el-form-item>
-            <el-form-item label="PDF 解析页数上限">
+            <el-form-item label="单个文件最大解析页数">
               <div class="user-pdf-limit-row">
                 <el-checkbox v-model="userEditForm.pdf_use_default">与系统全局一致</el-checkbox>
               </div>
@@ -1669,12 +1669,12 @@
             </el-form-item>
             <el-form-item label="管理员">
               <el-switch v-model="createUserForm.is_admin" />
-              <span class="muted" style="margin-left: 8px; font-size: 12px;">管理员不受 PDF 页数限制</span>
+              <span class="muted" style="margin-left: 8px; font-size: 12px;">管理员不受单个文件页数限制</span>
             </el-form-item>
             <el-form-item label="账号启用">
               <el-switch v-model="createUserForm.is_active" />
             </el-form-item>
-            <el-form-item label="PDF 解析页数上限">
+            <el-form-item label="单个文件最大解析页数">
               <div class="user-pdf-limit-row">
                 <el-checkbox v-model="createUserForm.pdf_use_default">与系统全局一致</el-checkbox>
               </div>
@@ -1711,7 +1711,7 @@
           </template>
         </el-dialog>
 
-        <el-dialog v-model="batchPdfDialogVisible" title="批量设置 PDF 解析页数上限" width="480px" destroy-on-close>
+        <el-dialog v-model="batchPdfDialogVisible" title="批量设置单个文件最大解析页数" width="480px" destroy-on-close>
           <el-alert
             type="warning"
             :closable="false"
@@ -3369,7 +3369,7 @@ async function openBatchPdfDialog() {
   if (!rows.length) return
   try {
     await ElMessageBox.confirm(
-      `您即将批量设置「PDF 解析页数上限」，将作用于已勾选的 ${rows.length} 个用户（不含管理员）。请确认用户列表无误；误操作将影响用户解析配额。`,
+      `您即将批量设置「单个文件最大解析页数」，将作用于已勾选的 ${rows.length} 个用户（不含管理员）。请确认用户列表无误；误操作将影响用户解析配额。`,
       '操作警告',
       { type: 'warning', confirmButtonText: '已了解，继续', cancelButtonText: '取消' }
     )

@@ -128,25 +128,25 @@ cp .env.example .env
 
 - 可视化预览（PNG/ZIP），Markdown 下载
 
-  ![image-20260409192154579](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192154579.png)
+  ![文档解析界面](assets/image-20260409192154579.png)
 
 ### 后台管理
 
 - 系统设置（注册、验证码、解析限制）
 
-  ![image-20260409192539587](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192539587.png)
+  ![系统设置](assets/image-20260409192539587.png)
 
 - 用户管理（CRUD + 批量操作）
 
-  ![image-20260409192456259](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192456259.png)
+  ![用户管理](assets/image-20260409192456259.png)
 
 - 生成记录查询与清理
 
-  ![image-20260409192515300](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192515300.png)
+  ![生成记录](assets/image-20260409192515300.png)
 
 - 模型下载与重载
 
-  ![image-20260409192613196](/home/syd168/workspace/myLLM/DocuLogic/assets/image-20260409192613196.png)
+  ![模型管理](assets/image-20260409192613196.png)
 
 ### 技术栈
 

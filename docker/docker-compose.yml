@@ -13,6 +13,9 @@ services:
       - "${HOST_PORT:-8030}:80"
     
     # 挂载数据卷
+    # Windows 用户注意：请将 ${DATA_DIR} 和 ${MODEL_DIR} 设置为绝对路径
+    # 例如: DATA_DIR=C:/Users/YourName/doculogic/data
+    #       MODEL_DIR=C:/Users/YourName/doculogic/models
     volumes:
       - ${DATA_DIR:-~/doculogic/data}/output:/data/output              # 文档解析输出文件
       - ${DATA_DIR:-~/doculogic/data}/logs:/app/logs                   # 应用日志

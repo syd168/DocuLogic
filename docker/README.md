@@ -132,6 +132,69 @@ chmod +x docker/deploy.sh
 
 ---
 
+## 🪟 Windows 部署注意事项
+
+### Docker Desktop for Windows 配置
+
+1. **安装 Docker Desktop**
+   - 下载并安装 [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)
+   - 确保启用 WSL 2 后端（推荐）
+
+2. **配置文件共享**
+   - 打开 Docker Desktop → Settings → Resources → File Sharing
+   - 添加你计划用于数据存储的驱动器（例如 `C:`、`D:` 等）
+   - 点击 "Apply & Restart"
+
+3. **设置环境变量**
+
+   在 PowerShell 中：
+   ```powershell
+   # 设置数据目录（使用绝对路径）
+   $env:DATA_DIR="C:/Users/YourName/doculogic/data"
+   $env:MODEL_DIR="C:/Users/YourName/doculogic/models"
+   
+   # 启动服务
+   docker compose up -d --build
+   ```
+
+   或者创建 `.env` 文件：
+   ```bash
+   # .env 文件内容
+   DATA_DIR=C:/Users/YourName/doculogic/data
+   MODEL_DIR=C:/Users/YourName/doculogic/models
+   JWT_SECRET=your-secure-jwt-secret
+   ```
+
+4. **路径格式要求**
+   - ✅ 正确：`C:/Users/Name/doculogic/data` （使用正斜杠）
+   - ✅ 正确：`C:\\Users\\Name\\doculogic\\data` （双反斜杠转义）
+   - ❌ 错误：`~/doculogic/data` （Linux 风格，Windows 不支持）
+   - ❌ 错误：`C:\Users\Name\doculogic\data` （单反斜杠会被转义）
+
+5. **GPU 支持**
+   - 需要安装 NVIDIA 驱动和 CUDA Toolkit
+   - Docker Desktop 会自动检测 GPU
+   - 验证：`docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi`
+
+### 常见问题
+
+**问题 1：卷挂载失败**
+```
+Error response from daemon: invalid mode: /data/output
+```
+**解决**：检查路径格式，确保使用正斜杠或双反斜杠
+
+**问题 2：权限被拒绝**
+```
+Permission denied: '/app/weights'
+```
+**解决**：在 Docker Desktop 中确认已添加对应驱动器的文件共享权限
+
+**问题 3：模型加载缓慢**
+**解决**：将模型放在 SSD 上，避免使用网络驱动器
+
+---
+
 ## 🔧 手动部署
 
 ### 步骤 1：准备数据目录

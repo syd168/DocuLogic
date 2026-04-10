@@ -2469,8 +2469,14 @@ function batchFileLinks(jobId) {
     { name: '可视化（单页 PNG / 多页 ZIP）', path: `/download/${jobId}/visualization` },
     { name: '原始输出 _raw.mmd', path: `/download/${jobId}/raw` },
     { name: '转换输出 .mmd', path: `/download/${jobId}/markdown` },
-    { name: '完整结果（ZIP，含图片）', path: `/download/${jobId}/result` },
   ]
+  
+  // 检查是否有完整结果 ZIP 文件
+  const job = records.value.find(r => r.job_id === jobId)
+  if (job && job.output_files && job.output_files.download_zip) {
+    links.push({ name: '完整结果（ZIP，含图片）', path: `/download/${jobId}/result` })
+  }
+  
   return links
 }
 

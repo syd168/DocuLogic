@@ -726,10 +726,20 @@ class LogicsParsingModel:
         # 检查是否有 assets 文件夹
         assets_dir = os.path.join(output_dir, "assets")
         has_assets = image_output_mode == "separate" and os.path.exists(assets_dir) and os.listdir(assets_dir)
+        
+        if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+            print(f"[调试] 图片输出模式: {image_output_mode}")
+            print(f"[调试] assets 目录: {assets_dir}")
+            print(f"[调试] assets 目录存在: {os.path.exists(assets_dir)}")
+            if os.path.exists(assets_dir):
+                print(f"[调试] assets 目录内容: {os.listdir(assets_dir)}")
+            print(f"[调试] 是否生成 ZIP: {has_assets}")
 
-        # 生成 ZIP 包供下载（仅 separate 模式需要，base64 模式图片已嵌入 .md 文件）
+        # 生成 ZIP 包供下载
+        # - separate 模式：始终生成 ZIP（即使没有 assets，也打包其他文件）
+        # - base64 模式：不生成 ZIP（图片已嵌入 .md 文件）
         download_zip_path = None
-        if has_assets:
+        if image_output_mode == "separate":
             download_zip_path = os.path.join(output_dir, f"{job_id}_result.zip")
             print(f"[调试] 生成完整结果 ZIP: {download_zip_path}")
             with zipfile.ZipFile(download_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -742,12 +752,13 @@ class LogicsParsingModel:
                 # 添加 visualization
                 zf.write(output_img_path, arcname=f"{job_id}_vis.png")
                 
-                # 添加 assets 文件夹中的所有图片
-                for img_file in os.listdir(assets_dir):
-                    img_path_full = os.path.join(assets_dir, img_file)
-                    if os.path.isfile(img_path_full):
-                        zf.write(img_path_full, arcname=f"assets/{img_file}")
-                        print(f"[调试] ZIP 中添加图片: assets/{img_file}")
+                # 添加 assets 文件夹中的所有图片（如果存在）
+                if os.path.exists(assets_dir) and os.path.isdir(assets_dir):
+                    for img_file in os.listdir(assets_dir):
+                        img_path_full = os.path.join(assets_dir, img_file)
+                        if os.path.isfile(img_path_full):
+                            zf.write(img_path_full, arcname=f"assets/{img_file}")
+                            print(f"[调试] ZIP 中添加图片: assets/{img_file}")
             
             print(f"[调试] ZIP 生成完成")
 
@@ -876,6 +887,14 @@ class LogicsParsingModel:
         assets_dir = os.path.join(output_dir, "assets")
         has_assets = image_output_mode == "separate" and os.path.exists(assets_dir) and os.listdir(assets_dir)
         
+        if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+            print(f"[调试] PDF-图片输出模式: {image_output_mode}")
+            print(f"[调试] PDF-assets 目录: {assets_dir}")
+            print(f"[调试] PDF-assets 目录存在: {os.path.exists(assets_dir)}")
+            if os.path.exists(assets_dir):
+                print(f"[调试] PDF-assets 目录内容: {os.listdir(assets_dir)}")
+            print(f"[调试] PDF-是否生成 ZIP: {has_assets}")
+        
         if done_pages == 1:
             single_vis = os.path.join(output_dir, f"{job_id}_vis.png")
             if vis_files:
@@ -888,9 +907,11 @@ class LogicsParsingModel:
                     zf.write(p, arcname=os.path.basename(p))
             vis_out = zip_path
         
-        # 生成 ZIP 包供下载（仅 separate 模式需要，base64 模式图片已嵌入 .md 文件）
+        # 生成 ZIP 包供下载
+        # - separate 模式：始终生成 ZIP（即使没有 assets，也打包其他文件）
+        # - base64 模式：不生成 ZIP（图片已嵌入 .md 文件）
         download_zip_path = None
-        if has_assets:
+        if image_output_mode == "separate":
             download_zip_path = os.path.join(output_dir, f"{job_id}_result.zip")
             print(f"[调试] 生成完整结果 ZIP: {download_zip_path}")
             with zipfile.ZipFile(download_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -906,12 +927,13 @@ class LogicsParsingModel:
                 if os.path.exists(vis_out):
                     zf.write(vis_out, arcname=os.path.basename(vis_out))
                 
-                # 添加 assets 文件夹中的所有图片
-                for img_file in os.listdir(assets_dir):
-                    img_path = os.path.join(assets_dir, img_file)
-                    if os.path.isfile(img_path):
-                        zf.write(img_path, arcname=f"assets/{img_file}")
-                        print(f"[调试] ZIP 中添加图片: assets/{img_file}")
+                # 添加 assets 文件夹中的所有图片（如果存在）
+                if os.path.exists(assets_dir) and os.path.isdir(assets_dir):
+                    for img_file in os.listdir(assets_dir):
+                        img_path = os.path.join(assets_dir, img_file)
+                        if os.path.isfile(img_path):
+                            zf.write(img_path, arcname=f"assets/{img_file}")
+                            print(f"[调试] ZIP 中添加图片: assets/{img_file}")
             
             print(f"[调试] ZIP 生成完成")
 

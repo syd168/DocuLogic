@@ -1,4 +1,4 @@
-# DocuLogic v2.3
+# DocuLogic v2.4
 
 <div align="center">
 
@@ -199,7 +199,14 @@ DocuLogic/
 
 ## 🚀 版本历史
 
-### v2.3.0 (最新)
+### v2.4.0 (最新)
+- ✨ 修复 ZIP 下载逻辑（separate 模式始终生成 ZIP）
+- ✨ 前端动态判断是否显示 ZIP 下载按钮
+- 🐛 修复 assets 目录不存在时的 FileNotFoundError
+- 📝 添加 Windows Docker 部署说明和路径配置提示
+- 🔧 优化调试日志输出
+
+### v2.3.0
 - ✨ UI/UX 全面优化（图标动画统一、文案精简）
 - 🐛 修复上传 500 错误（ParseJob 重复导入）
 - 📖 完善文档和 GitHub 链接

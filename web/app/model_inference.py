@@ -251,6 +251,8 @@ class LogicsParsingModel:
             src_match = re.search(r'src=["\']([^"\']+)["\']', img_tag, re.IGNORECASE)
             alt_match = re.search(r'alt=["\']([^"\']*)["\']', img_tag, re.IGNORECASE)
             alt = alt_match.group(1) if alt_match else 'image'
+            # 清理 alt 文本，移除可能导致 Markdown 解析问题的字符
+            alt = alt.replace(')', '').replace('(', '').strip() or 'image'
             
             # 根据输出模式处理图片
             if image_output_mode == "none":
@@ -319,7 +321,8 @@ class LogicsParsingModel:
                         src = f"data:image/png;base64,{img_base64}"
                         if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
                             print(f"[转换] base64 模式，长度: {len(src)} 字符")
-                        return f'\n\n![{alt}]({src})\n\n'
+                        # 使用 HTML img 标签以提高 Typora 等编辑器兼容性
+                        return f'\n\n<img src="{src}" alt="{alt}" style="max-width: 100%; height: auto;" />\n\n'
                         
                 except Exception as e:
                     if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
@@ -329,7 +332,8 @@ class LogicsParsingModel:
                     # 降级：如果有 src 则使用 src，否则返回空
                     if src_match:
                         src = src_match.group(1)
-                        return f'\n\n![{alt}]({src})\n\n'
+                        # 降级时也使用 HTML img 标签以提高兼容性
+                        return f'\n\n<img src="{src}" alt="{alt}" style="max-width: 100%; height: auto;" />\n\n'
                     return ''
             else:
                 # 没有原始图像，尝试使用 src 中的 base64
@@ -361,12 +365,14 @@ class LogicsParsingModel:
                         except Exception as e:
                             if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
                                 print(f"[警告] 保存图片失败: {e}")
-                            return f'\n\n![{alt}]({src})\n\n'
+                            # 降级时使用 HTML img 标签以提高兼容性
+                            return f'\n\n<img src="{src}" alt="{alt}" style="max-width: 100%; height: auto;" />\n\n'
                     else:
                         # base64 模式：直接使用
                         if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
                             print(f"[转换] base64 模式，保持原样")
-                        return f'\n\n![{alt}]({src})\n\n'
+                        # 使用 HTML img 标签以提高 Typora 等编辑器兼容性
+                        return f'\n\n<img src="{src}" alt="{alt}" style="max-width: 100%; height: auto;" />\n\n'
                 else:
                     if os.environ.get("DEBUG_MODE", "").lower() in ("1", "true", "yes"):
                         print(f"[警告] 既无原图也无 src，跳过图片")
@@ -721,28 +727,29 @@ class LogicsParsingModel:
         assets_dir = os.path.join(output_dir, "assets")
         has_assets = image_output_mode == "separate" and os.path.exists(assets_dir) and os.listdir(assets_dir)
 
-        # 生成完整的 ZIP 包供下载（始终生成，确保下载功能可用）
-        download_zip_path = os.path.join(output_dir, f"{job_id}_result.zip")
-        print(f"[调试] 生成完整结果 ZIP: {download_zip_path}")
-        with zipfile.ZipFile(download_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            # 添加 markdown 文件
-            zf.write(output_mmd_path, arcname=f"{job_id}.mmd")
-            
-            # 添加 raw 文件
-            zf.write(output_raw_path, arcname=f"{job_id}_raw.mmd")
-            
-            # 添加 visualization
-            zf.write(output_img_path, arcname=f"{job_id}_vis.png")
-            
-            # 如果是 separate 模式且有 assets，添加 assets 文件夹中的所有图片
-            if has_assets:
+        # 生成 ZIP 包供下载（仅 separate 模式需要，base64 模式图片已嵌入 .md 文件）
+        download_zip_path = None
+        if has_assets:
+            download_zip_path = os.path.join(output_dir, f"{job_id}_result.zip")
+            print(f"[调试] 生成完整结果 ZIP: {download_zip_path}")
+            with zipfile.ZipFile(download_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                # 添加 markdown 文件
+                zf.write(output_mmd_path, arcname=f"{job_id}.mmd")
+                
+                # 添加 raw 文件
+                zf.write(output_raw_path, arcname=f"{job_id}_raw.mmd")
+                
+                # 添加 visualization
+                zf.write(output_img_path, arcname=f"{job_id}_vis.png")
+                
+                # 添加 assets 文件夹中的所有图片
                 for img_file in os.listdir(assets_dir):
                     img_path_full = os.path.join(assets_dir, img_file)
                     if os.path.isfile(img_path_full):
                         zf.write(img_path_full, arcname=f"assets/{img_file}")
                         print(f"[调试] ZIP 中添加图片: assets/{img_file}")
-        
-        print(f"[调试] ZIP 生成完成")
+            
+            print(f"[调试] ZIP 生成完成")
 
         if progress_callback:
             progress_callback("处理完成！", 100)
@@ -752,8 +759,10 @@ class LogicsParsingModel:
             "visualization": output_img_path,
             "raw": output_raw_path,
             "markdown": output_mmd_path,
-            "download_zip": download_zip_path,  # 始终包含 ZIP 下载链接
         }
+        # 仅 separate 模式提供 ZIP 下载
+        if download_zip_path:
+            output_files["download_zip"] = download_zip_path
 
         return {
             "raw_output": raw_output,
@@ -879,31 +888,32 @@ class LogicsParsingModel:
                     zf.write(p, arcname=os.path.basename(p))
             vis_out = zip_path
         
-        # 生成完整的 ZIP 包供下载（始终生成，确保下载功能可用）
-        download_zip_path = os.path.join(output_dir, f"{job_id}_result.zip")
-        print(f"[调试] 生成完整结果 ZIP: {download_zip_path}")
-        with zipfile.ZipFile(download_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            # 添加 markdown 文件
-            if os.path.exists(output_mmd_path):
-                zf.write(output_mmd_path, arcname=f"{job_id}.mmd")
-            
-            # 添加 raw 文件
-            if os.path.exists(output_raw_path):
-                zf.write(output_raw_path, arcname=f"{job_id}_raw.mmd")
-            
-            # 添加可视化文件（单页 PNG 或多页 ZIP）
-            if os.path.exists(vis_out):
-                zf.write(vis_out, arcname=os.path.basename(vis_out))
-            
-            # 如果是 separate 模式且有 assets，添加 assets 文件夹中的所有图片
-            if has_assets:
+        # 生成 ZIP 包供下载（仅 separate 模式需要，base64 模式图片已嵌入 .md 文件）
+        download_zip_path = None
+        if has_assets:
+            download_zip_path = os.path.join(output_dir, f"{job_id}_result.zip")
+            print(f"[调试] 生成完整结果 ZIP: {download_zip_path}")
+            with zipfile.ZipFile(download_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                # 添加 markdown 文件
+                if os.path.exists(output_mmd_path):
+                    zf.write(output_mmd_path, arcname=f"{job_id}.mmd")
+                
+                # 添加 raw 文件
+                if os.path.exists(output_raw_path):
+                    zf.write(output_raw_path, arcname=f"{job_id}_raw.mmd")
+                
+                # 添加可视化文件（单页 PNG 或多页 ZIP）
+                if os.path.exists(vis_out):
+                    zf.write(vis_out, arcname=os.path.basename(vis_out))
+                
+                # 添加 assets 文件夹中的所有图片
                 for img_file in os.listdir(assets_dir):
                     img_path = os.path.join(assets_dir, img_file)
                     if os.path.isfile(img_path):
                         zf.write(img_path, arcname=f"assets/{img_file}")
                         print(f"[调试] ZIP 中添加图片: assets/{img_file}")
-        
-        print(f"[调试] ZIP 生成完成")
+            
+            print(f"[调试] ZIP 生成完成")
 
         if progress_callback:
             progress_callback("已停止，可下载已生成部分。" if user_stopped else "处理完成！", 100)
@@ -915,8 +925,10 @@ class LogicsParsingModel:
             "visualization": vis_out,
             "raw": output_raw_path,
             "markdown": output_mmd_path,
-            "download_zip": download_zip_path,  # 始终包含 ZIP 下载链接
         }
+        # 仅 separate 模式提供 ZIP 下载
+        if download_zip_path:
+            output_files["download_zip"] = download_zip_path
         
         return {
             "raw_output": combined_raw,

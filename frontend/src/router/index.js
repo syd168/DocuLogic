@@ -30,8 +30,11 @@ router.beforeEach(async (to, _from, next) => {
       next()
       return
     }
-  } catch {
-    /* 401 */
+  } catch (e) {
+    // 未登录是正常情况，静默处理，不显示错误日志
+    if (e.response?.status !== 401) {
+      console.error('路由守卫认证检查失败:', e.message)
+    }
   }
   next({ path: '/login', query: { next: to.fullPath } })
 })

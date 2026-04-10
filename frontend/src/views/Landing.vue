@@ -2,7 +2,7 @@
   <div class="landing-page">
     <!-- 粒子背景 Canvas -->
     <canvas ref="particleCanvas" class="particle-canvas"></canvas>
-    
+
     <header class="topbar">
       <router-link class="brand" to="/"><span class="brand-mark">📄</span> DocuLogic</router-link>
       <div class="topbar-actions">
@@ -221,26 +221,26 @@ class Particle {
     // 视差系数：不同深度的粒子移动速度不同
     this.parallaxFactor = Math.random() * 0.02 + 0.01
   }
-  
+
   update() {
     // 基础移动
     this.baseX += this.speedX
     this.baseY += this.speedY
-    
+
     // 边界循环
     if (this.baseX > this.canvas.width) this.baseX = 0
     if (this.baseX < 0) this.baseX = this.canvas.width
     if (this.baseY > this.canvas.height) this.baseY = 0
     if (this.baseY < 0) this.baseY = this.canvas.height
-    
+
     // 视差效果：根据鼠标位置偏移
     const deltaX = (mouseX - this.canvas.width / 2) * this.parallaxFactor
     const deltaY = (mouseY - this.canvas.height / 2) * this.parallaxFactor
-    
+
     this.x = this.baseX + deltaX
     this.y = this.baseY + deltaY
   }
-  
+
   draw(ctx) {
     ctx.fillStyle = `rgba(99, 102, 241, ${this.opacity})`
     ctx.beginPath()
@@ -252,41 +252,41 @@ class Particle {
 function initParticles() {
   const canvas = particleCanvas.value
   if (!canvas) return
-  
+
   const ctx = canvas.getContext('2d')
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
-  
+
   // 创建粒子（增加到150个以增强视觉效果）
   const particleCount = Math.min(150, Math.floor(window.innerWidth * window.innerHeight / 8000))
   particles = []
   for (let i = 0; i < particleCount; i++) {
     particles.push(new Particle(canvas))
   }
-  
+
   animate()
 }
 
 function animate() {
   const canvas = particleCanvas.value
   if (!canvas) return
-  
+
   const ctx = canvas.getContext('2d')
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  
+
   // 平滑插值鼠标位置
   mouseX += (targetMouseX - mouseX) * 0.1
   mouseY += (targetMouseY - mouseY) * 0.1
-  
+
   // 更新和绘制粒子
   particles.forEach(particle => {
     particle.update()
     particle.draw(ctx)
   })
-  
+
   // 绘制连线
   connectParticles(ctx)
-  
+
   animationId = requestAnimationFrame(animate)
 }
 
@@ -297,7 +297,7 @@ function connectParticles(ctx) {
       const dx = particles[i].x - particles[j].x
       const dy = particles[i].y - particles[j].y
       const distance = Math.sqrt(dx * dx + dy * dy)
-      
+
       if (distance < maxDistance) {
         const opacity = (1 - distance / maxDistance) * 0.2
         ctx.strokeStyle = `rgba(99, 102, 241, ${opacity})`
@@ -326,21 +326,35 @@ function handleResize() {
 }
 
 onMounted(async () => {
-  // 初始化粒子背景
-  initParticles()
+  // 使用 requestAnimationFrame 延迟初始化，避免布局强制
+  requestAnimationFrame(() => {
+    initParticles()
+  })
+
   window.addEventListener('resize', handleResize)
   window.addEventListener('mousemove', handleMouseMove)
-  
+
   try {
     const { data } = await http.get('/api/settings/public')
     registrationEnabled.value = data.registration_enabled !== false
   } catch {
     /* ignore */
   }
+
+  // 静默检查登录状态（使用 Cookie 认证）
   try {
     const { data } = await http.get('/api/auth/me')
-    if (data?.username) user.value = data.username
-  } catch {
+    if (data?.username) {
+      user.value = data.username
+    } else {
+      user.value = null
+    }
+  } catch (e) {
+    // 401 表示未登录，这是正常情况，静默处理
+    // 其他错误才输出日志
+    if (e.response?.status !== 401) {
+      console.error('获取用户信息失败:', e.message)
+    }
     user.value = null
   }
 })
@@ -464,7 +478,7 @@ onUnmounted(() => {
 /* 鼠标悬停效果 */
 .title-text:hover {
   transform: scale(1.05) rotateX(10deg) rotateY(-5deg);
-  filter: drop-shadow(0 0 30px rgba(99, 102, 241, 0.6)) 
+  filter: drop-shadow(0 0 30px rgba(99, 102, 241, 0.6))
           drop-shadow(0 0 60px rgba(168, 85, 247, 0.4));
   animation-play-state: paused;
 }
@@ -555,22 +569,22 @@ onUnmounted(() => {
     max-width: 95%; /* 移动端使用更宽的宽度 */
     padding: 40px 16px; /* 减小内边距 */
   }
-  
+
   .landing-block--narrow {
     max-width: 95%;
     padding: 35px 16px;
   }
-  
+
   .landing-cta-bottom {
     max-width: 95%;
     padding: 40px 16px 60px;
   }
-  
+
   /* 移动端标题优化 */
   :deep(.hero h1) {
     font-size: 1.8rem;
   }
-  
+
   .title-text:hover {
     transform: scale(1.02);
     filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.5));

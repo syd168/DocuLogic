@@ -177,9 +177,36 @@ def reload_model_from_settings() -> None:
                 f"建议：点击「后台下载到模型目录」重新下载完整模型"
             )
         
+        # 记录加载前的显存状态
+        try:
+            import torch
+            if torch.cuda.is_available():
+                allocated_before = torch.cuda.memory_allocated() / (1024**3)
+                reserved_before = torch.cuda.memory_reserved() / (1024**3)
+                print(f"📊 加载前显存状态: 已分配={allocated_before:.2f}GB, 已保留={reserved_before:.2f}GB")
+        except Exception:
+            pass
+        
         try:
             model = LogicsParsingModel(path_str)
-            print("✅ 模型加载成功!")
+            
+            # 记录加载后的显存状态
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    allocated_after = torch.cuda.memory_allocated() / (1024**3)
+                    reserved_after = torch.cuda.memory_reserved() / (1024**3)
+                    used = allocated_after - allocated_before
+                    print(f"✅ 模型加载成功! 显存使用: {allocated_after:.2f}GB (新增 {used:.2f}GB)")
+                    
+                    # 如果显存使用超过 90%，给出警告
+                    total_gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                    usage_percent = (allocated_after / total_gpu_memory) * 100
+                    if usage_percent > 90:
+                        print(f"⚠️  警告: 显存使用率已达 {usage_percent:.1f}% ({allocated_after:.2f}GB / {total_gpu_memory:.2f}GB)")
+                        print(f"   建议: 关闭其他占用显存的程序，或考虑增加显存")
+            except Exception:
+                print("✅ 模型加载成功!")
         except Exception as e:
             model = None
             error_msg = str(e)
@@ -195,14 +222,38 @@ def reload_model_from_settings() -> None:
                     f"建议：删除当前模型后重新下载"
                 ) from e
             elif "CUDA out of memory" in error_msg:
-                raise RuntimeError(
-                    f"显存不足，无法加载模型\n\n"
-                    f"当前模型：{path_str}\n\n"
-                    f"建议：\n"
-                    f"1. 关闭其他占用显存的程序\n"
-                    f"2. 使用更小的模型\n"
-                    f"3. 降低 batch size"
-                ) from e
+                # 提供更详细的显存信息和建议
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        total_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                        alloc_mem = torch.cuda.memory_allocated() / (1024**3)
+                        free_mem = total_mem - alloc_mem
+                        
+                        raise RuntimeError(
+                            f"显存不足，无法加载模型\n\n"
+                            f"GPU 信息:\n"
+                            f"- 总显存: {total_mem:.2f} GB\n"
+                            f"- 已分配: {alloc_mem:.2f} GB\n"
+                            f"- 可用: {free_mem:.2f} GB\n\n"
+                            f"建议解决方案:\n"
+                            f"1. 关闭其他占用显存的程序（如 Jupyter、其他训练任务）\n"
+                            f"2. 重启服务以释放显存碎片\n"
+                            f"3. 设置环境变量: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True\n"
+                            f"4. 使用更小的模型或降低精度\n\n"
+                            f"如需立即尝试，可执行:\n"
+                            f"docker restart doculogic-app"
+                        ) from e
+                except RuntimeError:
+                    raise  # 重新抛出上面的 RuntimeError
+                except Exception:
+                    raise RuntimeError(
+                        f"显存不足，无法加载模型\n\n"
+                        f"建议：\n"
+                        f"1. 关闭其他占用显存的程序\n"
+                        f"2. 重启服务以释放显存\n"
+                        f"3. 设置环境变量: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"
+                    ) from e
             else:
                 raise RuntimeError(f"模型加载失败：{error_msg[:300]}") from e
     finally:

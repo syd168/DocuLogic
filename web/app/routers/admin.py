@@ -340,10 +340,13 @@ async def admin_get_model_status(
 
 @router.post("/model/reload")
 async def admin_reload_model(
-    _: User = Depends(get_current_admin),
+    current_user: User = Depends(get_current_admin),
 ):
     """手动重新加载模型（先卸载再加载）"""
     from .. import main as main_module
+
+    # 审计日志：记录谁在什么时候执行了模型重载
+    _log.info(f"🔐 管理员 [{current_user.username}] (ID:{current_user.id}) 请求重新加载模型")
 
     # 检查是否有下载任务正在进行
     if _download_status.get("is_downloading", False):
@@ -359,19 +362,55 @@ async def admin_reload_model(
         current_model = main_module.get_inference_model()
         if current_model is not None:
             _log.info("检测到已加载的模型，正在卸载...")
-            # 删除模型引用，让 Python 垃圾回收器释放内存
+            
+            # 1. 记录卸载前的显存使用情况
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    allocated_before = torch.cuda.memory_allocated() / (1024**3)
+                    reserved_before = torch.cuda.memory_reserved() / (1024**3)
+                    _log.info(f"📊 卸载前显存状态: 已分配={allocated_before:.2f}GB, 已保留={reserved_before:.2f}GB")
+            except Exception:
+                pass
+            
+            # 2. 显式删除模型内部引用
+            try:
+                if hasattr(current_model, 'model'):
+                    del current_model.model
+                    _log.info("已删除 model 属性")
+                if hasattr(current_model, 'processor'):
+                    del current_model.processor
+                    _log.info("已删除 processor 属性")
+            except Exception as e:
+                _log.warning(f"删除模型属性时出错: {e}")
+            
+            # 3. 删除全局模型引用
             main_module.model = None
+            del current_model
+            _log.info("已删除全局模型引用")
+            
+            # 4. 多次强制垃圾回收
             import gc
-            gc.collect()
-            # 如果是 CUDA，尝试清理缓存
+            for i in range(3):
+                gc.collect()
+            _log.info("已执行垃圾回收 (3次)")
+            
+            # 5. 清理 CUDA 缓存
             try:
                 import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-                    _log.info("已清理 CUDA 缓存")
-            except Exception:
-                pass
-            _log.info("模型已卸载")
+                    torch.cuda.synchronize()  # 等待所有 CUDA 操作完成
+                    
+                    # 记录卸载后的显存使用情况
+                    allocated_after = torch.cuda.memory_allocated() / (1024**3)
+                    reserved_after = torch.cuda.memory_reserved() / (1024**3)
+                    freed = allocated_before - allocated_after
+                    _log.info(f"✅ 卸载后显存状态: 已分配={allocated_after:.2f}GB, 已保留={reserved_after:.2f}GB, 释放={freed:.2f}GB")
+            except Exception as e:
+                _log.warning(f"清理 CUDA 缓存时出错: {e}")
+            
+            _log.info("模型卸载完成")
         
         # 重新加载模型
         _log.info("正在从配置加载模型...")

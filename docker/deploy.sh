@@ -15,8 +15,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 # 配置
-DATA_DIR="${DATA_DIR:-${HOME}/doculogic}"
-MODEL_DIR="${MODEL_DIR:-${DATA_DIR}/models}"
+DATA_DIR="${DATA_DIR:-${HOME}/doculogic/data}"
+MODEL_DIR="${MODEL_DIR:-${HOME}/doculogic/models}"
 HOST_PORT="${HOST_PORT:-8030}"
 
 echo "📁 数据目录: ${DATA_DIR}"
@@ -55,7 +55,7 @@ fi
 
 # 检查子目录，如果不存在则提示（由 Docker 自动创建）
 MISSING_DIRS=()
-for dir in "${DATA_DIR}/output" "${DATA_DIR}/logs" "${DATA_DIR}/database" "${MODEL_DIR}"; do
+for dir in "${DATA_DIR}/output" "${DATA_DIR}/logs" "${DATA_DIR}/database/sqlite" "${DATA_DIR}/backups" "${MODEL_DIR}"; do
     if [ ! -d "$dir" ]; then
         MISSING_DIRS+=("$dir")
     fi
@@ -82,8 +82,9 @@ else
     echo "请下载模型到: ${MODEL_DIR}"
     echo "  方式1: python logics-parsingv2/download_model_v2.py"
     echo "  方式2: 手动下载后移动到 ${MODEL_DIR}"
+    echo "  方式3: 登录本项目后台，然后在系统设置中下载模型"
     echo ""
-    read -p "是否继续部署？(可以稍后下载模型) [y/N]: " -n 1 -r
+    read -p "是否在没有模型的情况下继续部署？(可以稍后下载模型) [y/N]: " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 1
@@ -376,13 +377,18 @@ echo "访问地址: http://localhost:${HOST_PORT}"
 echo "API 文档: http://localhost:${HOST_PORT}/api/docs"
 echo ""
 echo "数据目录: ${DATA_DIR}/"
-echo "  ├── output/      # 解析输出"
-echo "  ├── logs/        # 日志文件"
-echo "  ├── database/    # 数据库 (SQLite)"
-echo "  ├── mysql/       # MySQL 数据 (如使用)"
-echo "  ├── postgresql/  # PostgreSQL 数据 (如使用)"
-echo "  ├── redis/       # Redis缓存数据"
-echo "  └── models/      # 模型权重"
+echo "  ├── output/          # 文档解析输出文件"
+echo "  ├── logs/            # 应用日志文件"
+echo "  │   └── app.log"
+echo "  ├── database/        # 数据库文件目录"
+echo "  │   ├── sqlite/      # SQLite 数据库 (DATABASE_TYPE=sqlite)"
+echo "  │   ├── mysql/       # MySQL 数据 (DATABASE_TYPE=mysql)"
+echo "  │   ├── mariadb/     # MariaDB 数据 (DATABASE_TYPE=mariadb)"
+echo "  │   └── postgresql/  # PostgreSQL 数据 (DATABASE_TYPE=postgresql)"
+echo "  ├── redis/           # Redis 缓存数据"
+echo "  └── backups/         # 数据库备份文件"
+echo ""
+echo "模型目录: ${MODEL_DIR}/"
 echo ""
 echo "服务列表:"
 echo "  - doculogic      # 主应用（FastAPI + Nginx）"

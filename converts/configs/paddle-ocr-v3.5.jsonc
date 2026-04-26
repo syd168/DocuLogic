@@ -1,0 +1,62 @@
+{
+  "_ui": {
+    "order": [
+      "runtime_mode",
+      "api_url",
+      "access_token",
+      "timeout_seconds",
+      "use_doc_unwarping",
+      "use_doc_orientation_classify",
+      "visualize",
+      "extra_options",
+      "local_output_markdown",
+      "local_output_raw",
+      "download"
+    ],
+    "labels": {
+      "runtime_mode": "运行模式",
+      "api_url": "API 地址",
+      "access_token": "访问令牌",
+      "timeout_seconds": "超时秒数",
+      "use_doc_unwarping": "文档去扭曲",
+      "use_doc_orientation_classify": "方向分类",
+      "visualize": "返回可视化结果",
+      "extra_options": "高级扩展参数",
+      "local_output_markdown": "本地 Markdown 输出路径模板",
+      "local_output_raw": "本地 Raw 输出路径模板",
+      "download": "模型下载配置"
+    },
+    "hints": {
+      "runtime_mode": "api 使用服务端 API；local 使用本地命令行模式。",
+      "api_url": "必须以 /layout-parsing 结尾。",
+      "access_token": "API 授权令牌。",
+      "timeout_seconds": "请求超时（秒）。",
+      "extra_options": "将原样透传到 Paddle parse_document；参数请参考 PaddleOCR 文档中 parse_document/API 的可选字段。",
+      "download": "下载按钮会按该配置执行。"
+    }
+  },
+  // 运行模式：api | local
+  "runtime_mode": "local",
+  // --- API 模式参数（runtime_mode=api 时生效）---
+  "api_url": "https://your-service.example.com/layout-parsing",
+  "access_token": "replace-with-token",
+  "timeout_seconds": 600,
+  "use_doc_unwarping": false,
+  "use_doc_orientation_classify": false,
+  "visualize": false,
+  "extra_options": {},
+  // --- 本地模式参数（runtime_mode=local 时生效）---
+  // 占位符：{input_path} {output_dir} {job_id}
+  "local_command": "python -c \"import importlib.util;from pathlib import Path;lib=Path('converts/models/PaddleOCR-3.5.0/skills/paddleocr-doc-parsing/scripts/lib.py');spec=importlib.util.spec_from_file_location('pdl',str(lib));m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);r=m.parse_document(file_path=r'{input_path}',useDocUnwarping=False,useDocOrientationClassify=False,visualize=False);text=(r.get('text') or '');Path(r'{output_dir}').mkdir(parents=True,exist_ok=True);Path(r'{output_dir}/{job_id}.md').write_text(text,encoding='utf-8');Path(r'{output_dir}/{job_id}_raw.md').write_text(text,encoding='utf-8')\"",
+  "local_output_markdown": "{output_dir}/{job_id}.md",
+  "local_output_raw": "{output_dir}/{job_id}_raw.md",
+  // 下载配置（前端“下载模型文件”按钮读取这里）
+  "download": {
+    "mode": "snapshot",
+    "dest_dir": "weights/paddle-ocr-v3.5/PaddleOCR-VL-0.9B",
+    "repos": {
+      "huggingface": "PaddlePaddle/PaddleOCR-VL-0.9B",
+      "modelscope": "PaddlePaddle/PaddleOCR-VL-0.9B"
+    }
+  }
+}

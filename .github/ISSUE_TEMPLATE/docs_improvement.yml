@@ -1,0 +1,55 @@
+name: Documentation
+description: 改进或添加文档
+title: "[Docs]: "
+labels: ["documentation"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢帮助改进文档！
+        
+  - type: dropdown
+    id: type
+    attributes:
+      label: 文档类型
+      options:
+        - README 改进
+        - API 文档
+        - 代码注释
+        - 教程/指南
+        - 常见问题
+        - 部署文档
+        - 其他
+    validations:
+      required: true
+      
+  - type: textarea
+    id: description
+    attributes:
+      label: 描述
+      description: 你想要改进或添加什么文档
+      placeholder: 我觉得...部分的文档需要...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: location
+    attributes:
+      label: 位置
+      description: 相关文件或页面的位置
+      placeholder: e.g., README.md, /docs/api/, etc.
+      
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 建议内容
+      description: 你建议的具体内容或改进方向
+      
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: 贡献意愿
+      options:
+        - label: 我愿意为此文档改进提交 PR
+          required: false

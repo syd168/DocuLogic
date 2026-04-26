@@ -1,0 +1,76 @@
+@import './platform.css';
+
+/* Element Plus 与现有暗色主题对齐 */
+html.dark {
+  --el-bg-color: #141c2f;
+  --el-bg-color-overlay: #1a2540;
+  --el-text-color-primary: #e8eef8;
+  --el-text-color-regular: #c5d0e0;
+  --el-text-color-secondary: #8b9cb8;
+  --el-border-color: rgba(100, 180, 255, 0.12);
+  --el-fill-color-blank: #0c1222;
+  --el-fill-color-light: rgba(61, 214, 245, 0.06);
+  --el-color-primary: #3dd6f5;
+  --el-color-primary-light-3: #5cdff7;
+  --el-color-primary-light-5: #7ee8fa;
+  --el-color-primary-light-7: #aef4fc;
+  --el-color-primary-light-9: #0c1222;
+  --el-color-danger: #f56c6c;
+}
+
+.el-button--primary {
+  --el-button-bg-color: linear-gradient(135deg, #3dd6f5, #2a9fb8);
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim)) !important;
+  border: none !important;
+  color: #061018 !important;
+  font-weight: 600;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  filter: brightness(1.08);
+}
+
+.el-card {
+  --el-card-bg-color: var(--bg-card);
+  border-color: var(--border) !important;
+  background: var(--bg-card) !important;
+  color: var(--text) !important;
+}
+
+.el-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--text-muted);
+  --el-menu-hover-bg-color: rgba(61, 214, 245, 0.06);
+  --el-menu-active-color: var(--accent);
+  border-right: none !important;
+}
+
+.el-menu-item.is-active {
+  background: rgba(61, 214, 245, 0.1) !important;
+  border: 1px solid rgba(61, 214, 245, 0.25);
+  border-radius: 8px;
+}
+
+.el-input__wrapper {
+  background-color: var(--bg-deep) !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+}
+
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: var(--bg-elevated);
+  --el-table-text-color: var(--text);
+  --el-table-header-text-color: var(--text-muted);
+  --el-table-border-color: var(--border);
+}
+
+.el-progress-bar__outer {
+  background-color: rgba(0, 0, 0, 0.35) !important;
+}
+
+.el-upload-dragger {
+  background: var(--bg-elevated) !important;
+  border-color: rgba(61, 214, 245, 0.25) !important;
+}

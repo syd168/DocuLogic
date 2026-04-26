@@ -1,0 +1,14 @@
+.env
+venv/
+__pycache__/
+*.py[cod]
+web/data/*.db
+web/output/
+out/
+frontend/node_modules/
+frontend/dist/
+.run/
+logs/
+weights/
+# 转换器源码目录由部署方本地准备，不提交到 Git/GitHub
+converts/models/

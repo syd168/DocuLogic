@@ -1,0 +1,25 @@
+{
+  "_ui": {
+    "order": [
+      "prompt",
+      "download"
+    ],
+    "labels": {
+      "prompt": "提示词模板",
+      "download": "模型下载配置"
+    },
+    "hints": {
+      "prompt": "用于控制 Logics 解析输出风格（如 QwenVL HTML）。",
+      "download": "下载按钮会按该配置执行。"
+    }
+  },
+  "prompt": "QwenVL HTML",
+  "download": {
+    "mode": "snapshot",
+    "dest_dir": "weights/logics-parsing-v2",
+    "repos": {
+      "huggingface": "Logics-MLLM/Logics-Parsing-v2",
+      "modelscope": "Alibaba-DT/Logics-Parsing-v2"
+    }
+  }
+}

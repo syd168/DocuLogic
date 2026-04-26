@@ -1,0 +1,300 @@
+services:
+  # 主应用服务
+  doculogic:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: doculogic
+    restart: unless-stopped
+    runtime: nvidia
+    
+    # 仅暴露前端端口 80，后端通过 Nginx 内部代理
+    ports:
+      - "${HOST_PORT:-8030}:80"
+    
+    # 挂载数据卷
+    # Windows 用户注意：请将 ${DATA_DIR} 和 ${MODEL_DIR} 设置为绝对路径
+    # 例如: DATA_DIR=C:/Users/YourName/doculogic/data
+    #       MODEL_DIR=C:/Users/YourName/doculogic/weights（容器内挂载为 /app/weights）
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/output:/data/output              # 文档解析输出文件
+      - ${DATA_DIR:-~/doculogic/data}/logs:/app/logs                   # 应用日志
+      - ${DATA_DIR:-~/doculogic/data}/database/sqlite:/app/web/data   # SQLite 数据库（DATABASE_TYPE=sqlite 时）
+      - ${DATA_DIR:-~/doculogic/data}/backups:/app/backups             # 数据库备份目录
+      # 宿主机模型目录映射到容器（当前统一使用 weights 路径）
+      - ${MODEL_DIR:-~/doculogic/weights}:/app/weights
+    
+    # 环境变量配置
+    environment:
+      # 运行环境（production/prod 会强制检查 JWT_SECRET）
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      # JWT 密钥（生产环境务必修改）
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      # 模型快照目录（须含 config.json 等），默认当前转换器 logics-parsing-v2
+      - MODEL_PATH=./weights/logics-parsing-v2
+      # 输出目录
+      - OUTPUT_DIR=/data/output
+      # CORS 配置
+      # 须与浏览器访问来源一致（含端口）；默认覆盖常见本机访问方式
+      - CORS_ORIGINS=http://localhost:8030,http://127.0.0.1:8030,http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173
+      # 管理员用户名（可选）
+      - ADMIN_USERNAMES=${ADMIN_USERNAMES:-admin}
+      # PDF 最大页数
+      - PDF_MAX_PAGES=${PDF_MAX_PAGES:-80}
+      # 允许无模型启动
+      - ALLOW_START_WITHOUT_MODEL=${ALLOW_START_WITHOUT_MODEL:-1}
+      # 调试模式
+      - DEBUG_MODE=${DEBUG_MODE:-0}
+      # 邮件模拟模式
+      - EMAIL_MOCK=${EMAIL_MOCK:-true}
+      
+      # ========== PyTorch CUDA 优化 ==========
+      # 避免显存碎片化，提升显存利用率
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      
+      # ========== Redis 配置 ==========
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      # - REDIS_PASSWORD=  # 如果需要密码认证，取消注释并设置
+      
+      # ========== 数据库配置 ==========
+      - DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
+      # MySQL / MariaDB 配置（当 DATABASE_TYPE=mysql 或 mariadb 时生效）
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-doculogic_secure_password}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-doculogic}
+      - MYSQL_CHARSET=utf8mb4
+      # PostgreSQL 配置（当 DATABASE_TYPE=postgresql 时生效）
+      - PG_HOST=postgresql
+      - PG_PORT=5432
+      - PG_USER=${PG_USER:-postgres}
+      - PG_PASSWORD=${PG_PASSWORD:-doculogic_secure_password}
+      - PG_DATABASE=${PG_DATABASE:-doculogic}
+      # 数据备份时间
+      - RETENTION_DAYS=30  # 保留 30 天
+    
+    # GPU 支持
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu]
+    
+    # 资源限制
+    mem_limit: ${MEM_LIMIT:-8g}
+    cpus: ${CPU_LIMIT:-4.0}
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # 依赖 Redis（数据库服务通过 profiles 动态启用）
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - doculogic-network
+
+  # Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: doculogic-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    
+    # 数据持久化
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/redis:/data
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    # 资源限制
+    mem_limit: 1g
+    cpus: 1.0
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    networks:
+      - doculogic-network
+
+  # MySQL 数据库服务（可选，当 DATABASE_TYPE=mysql 或 mariadb 时启用）
+  mysql:
+    image: mysql:8.0
+    container_name: doculogic-mysql
+    restart: unless-stopped
+    profiles:
+      - mysql  # 使用 --profile mysql 启用
+    command: >
+      mysqld
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    
+    # 环境变量
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-doculogic}
+      # 注意：MYSQL_USER 不能是 root，创建一个普通用户
+      MYSQL_USER: ${MYSQL_APP_USER:-doculogic}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
+    
+    # 数据持久化
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/database/mysql:/var/lib/mysql
+      # 挂载初始化脚本（首次启动时自动执行）
+      - ../web/data/mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD:-doculogic_secure_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    
+    # 资源限制
+    mem_limit: 2g
+    cpus: 2.0
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - doculogic-network
+
+  # MariaDB 数据库服务（可选，当 DATABASE_TYPE=mariadb 时启用）
+  mariadb:
+    image: mariadb:10.11
+    container_name: doculogic-mariadb
+    restart: unless-stopped
+    profiles:
+      - mariadb  # 使用 --profile mariadb 启用
+    command: >
+      mysqld
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    
+    # 环境变量
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
+      MARIADB_DATABASE: ${MYSQL_DATABASE:-doculogic}
+      MARIADB_USER: ${MYSQL_APP_USER:-doculogic}
+      MARIADB_PASSWORD: ${MYSQL_PASSWORD:-doculogic_secure_password}
+    
+    # 数据持久化
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/database/mariadb:/var/lib/mysql
+      # 挂载初始化脚本（首次启动时自动执行）
+      - ../web/data/mariadb.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    
+    # 资源限制
+    mem_limit: 2g
+    cpus: 2.0
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # 网络配置：添加 'mysql' 别名，使应用可以通过统一的主机名访问
+    networks:
+      doculogic-network:
+        aliases:
+          - mysql
+
+  # PostgreSQL 数据库服务（可选，当 DATABASE_TYPE=postgresql 时启用）
+  postgresql:
+    image: postgres:16-alpine
+    container_name: doculogic-postgresql
+    restart: unless-stopped
+    profiles:
+      - postgresql  # 使用 --profile postgresql 启用
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+    
+    # 环境变量
+    environment:
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-doculogic_secure_password}
+      POSTGRES_DB: ${PG_DATABASE:-doculogic}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    
+    # 数据持久化
+    volumes:
+      - ${DATA_DIR:-~/doculogic/data}/database/postgresql:/var/lib/postgresql/data
+      # 挂载初始化脚本（首次启动时自动执行）
+      - ../web/data/postgresql.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres} -d ${PG_DATABASE:-doculogic}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    
+    # 资源限制
+    mem_limit: 2g
+    cpus: 2.0
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # 网络配置：添加 'postgresql' 和 'pg' 别名
+    networks:
+      doculogic-network:
+        aliases:
+          - postgresql
+          - pg
+
+# 网络配置
+networks:
+  doculogic-network:
+    driver: bridge

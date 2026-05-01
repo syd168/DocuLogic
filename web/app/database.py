@@ -167,8 +167,8 @@ def init_db():
     migrate_app_settings_password_rules()  # 密码规则配置
     migrate_app_settings_max_upload_size()  # 文件上传大小限制
     migrate_app_settings_allow_multi_file_upload()  # 是否允许多文件上传
-    migrate_app_settings_default_converter()  # 默认转换器配置
-    migrate_app_settings_drop_legacy_converter_columns()  # 清理历史转换器专属 DB 列
+    migrate_app_settings_default_converter()  # 默认文档解析器配置
+    migrate_app_settings_drop_legacy_converter_columns()  # 清理历史文档解析器专属 DB 列
     migrate_app_settings_init_defaults()  # 初始化默认配置值
     _bootstrap_settings_and_admins()  # 引导初始数据
 
@@ -514,7 +514,7 @@ def migrate_app_settings_allow_multi_file_upload():
 
 
 def migrate_app_settings_default_converter():
-    """为 app_settings 添加 default_converter_id 字段（默认转换器 ID）。"""
+    """为 app_settings 添加 default_converter_id 字段（默认文档解析器 ID）。"""
     from sqlalchemy import inspect
 
     db = SessionLocal()
@@ -543,7 +543,7 @@ def migrate_app_settings_default_converter():
 
 
 def migrate_app_settings_drop_legacy_converter_columns():
-    """删除 app_settings 中历史模型/转换器专属字段，统一迁移到 converter config-data。"""
+    """删除 app_settings 中历史模型/文档解析器专属字段，统一迁移到 converter config-data。"""
     from sqlalchemy import inspect
 
     db = SessionLocal()
@@ -570,10 +570,10 @@ def migrate_app_settings_drop_legacy_converter_columns():
 
         db.commit()
         if dropped:
-            print(f"✅ 已删除历史转换器配置字段: {', '.join(dropped)}")
+            print(f"✅ 已删除历史文档解析器配置字段: {', '.join(dropped)}")
     except Exception as e:
         db.rollback()
-        print(f"⚠️ 清理历史转换器配置字段失败: {e}")
+        print(f"⚠️ 清理历史文档解析器配置字段失败: {e}")
     finally:
         db.close()
 

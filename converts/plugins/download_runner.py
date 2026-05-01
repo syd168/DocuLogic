@@ -110,14 +110,34 @@ class PluginDownloadRunner:
         self._tasks: dict[str, dict] = {}
 
     def _dest_path_from_download_cfg(self, dcfg: dict, override: str) -> Path:
-        """与 start() 一致：override → JSONC download.dest_dir → 插件默认。"""
-        cfg_dest = str(dcfg.get("dest_dir") or "").strip()
-        target_dir = (override or "").strip() or cfg_dest or self.target_dir
-        if not target_dir:
-            raise RuntimeError("未配置下载目标路径")
-        dest = Path(target_dir)
+        """确定下载目标路径。
+        
+        路径规则（简化版）：
+        - 本地开发: 项目根目录/weights/<engine_id>
+        - Docker部署: /app/weights/<engine_id>
+        
+        优先级：
+        1. 用户请求中的覆盖路径 (override) - 临时指定
+        2. 自动推导: weights/<engine_id> - 默认规则
+        """
+        # 1. 用户显式指定的路径（最高优先级，用于特殊情况）
+        if override and str(override).strip():
+            dest = Path(str(override).strip())
+            if not dest.is_absolute():
+                dest = Path.cwd() / dest
+            return dest
+        
+        # 2. 默认规则：weights/<engine_id>
+        # 这是最简洁的方式，符合约定优于配置的原则
+        dest = Path("weights") / self.engine_id
         if not dest.is_absolute():
             dest = Path.cwd() / dest
+        
+        _log.info(
+            "[download] using default path for engine=%s: %s",
+            self.engine_id,
+            str(dest),
+        )
         return dest
 
     def get_schema(self) -> ConverterDownloadSchema:
@@ -234,6 +254,7 @@ class PluginDownloadRunner:
         if not path.is_dir():
             raise RuntimeError(f"目标不是目录: {path}")
         rmtree(path)
+        _log.info("[download] model files deleted engine=%s path=%s", self.engine_id, str(path))
         return {"ok": True, "deleted": True, "path": str(path), "message": "模型文件目录已删除"}
 
     def _set_status(self, task_id: str, updater) -> None:

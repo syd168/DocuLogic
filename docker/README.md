@@ -101,18 +101,67 @@ docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 
 ---
 
-## 一键部署脚本
+## 🚀 一键部署脚本
 
-首次克隆后若脚本无执行权限：
+```
+# 1. 克隆项目
+git clone https://github.com/syd168/DocuLogic.git
+cd DocuLogic
 
-```bash
-chmod +x docker/deploy.sh
+# 2. 执行一键部署
 ./docker/deploy.sh
 ```
 
-脚本会先检查本地 `converts/models/` 是否已准备（目录不存在或为空会中止部署）。
+### ✨ 智能特性
 
-说明：该目录不提交到 GitHub，需部署方自行下载并放置转换器源码子目录后再执行部署。
+**🔄 自动数据迁移**：
+- 当从 SQLite 切换到 MySQL/MariaDB/PostgreSQL 时，部署脚本会**自动检测并迁移数据**
+- 原始 SQLite 数据会被保留，确保可随时回滚
+- 无需手动运行迁移脚本，实现无缝切换
+
+**📋 SQLite 数据库自动同步**：
+- 部署时自动检测项目根目录的 `web/data/app.db`
+- 如果存在，自动复制到 Docker 卷挂载点 `${DATA_DIR}/database/sqlite/app.db`
+- 智能判断：仅在源文件更新或目标不存在时复制
+- **强制覆盖**：使用 `-f` 或 `--force-copy` 参数强制覆盖现有数据库
+
+**🔒 安全保障**：
+- 自动生成随机 JWT_SECRET（生产环境必需）
+- 检查 Docker 权限和依赖目录
+- 清理残留容器，避免端口冲突
+
+**📊 多数据库支持**：
+通过修改 `.env` 中的 `DATABASE_TYPE` 即可切换：
+```bash
+DATABASE_TYPE=sqlite      # 默认，无需额外服务（文件数据库）
+DATABASE_TYPE=mysql       # MySQL 8.0（独立容器）
+DATABASE_TYPE=mariadb     # MariaDB 10.11（独立容器）
+DATABASE_TYPE=postgresql  # PostgreSQL 16（独立容器）
+```
+
+**💡 智能容器管理**：
+- ✅ **按需创建容器**：只启动你选择的数据库类型对应的容器
+- ✅ **自动清理残留**：切换数据库类型时，自动删除不需要的旧容器
+- ✅ **SQLite 特殊优化**：作为文件数据库，直接通过卷挂载使用，无需独立服务
+- ✅ **数据无缝迁移**：从 SQLite 切换到其他数据库时，自动执行数据转换
+
+### 🛠️ 命令行参数
+
+```bash
+# 基本部署
+./docker/deploy.sh
+
+# 强制覆盖 SQLite 数据库（即使目标已存在）
+./docker/deploy.sh --force-copy
+# 或简写
+./docker/deploy.sh -f
+
+# 跳过自动数据迁移
+./docker/deploy.sh --skip-migration
+
+# 查看帮助
+./docker/deploy.sh --help
+```
 
 ---
 
@@ -183,6 +232,19 @@ Permission denied: '/app/weights'
 
 以下适用于**不通过** `./docker/deploy.sh`、需自行准备目录与模型的场景。若使用一键部署，目录与密钥多由脚本创建，详见根 README **「Docker 一键部署」**。
 
+### 📌 重要说明：容器启动流程
+
+DocuLogic Docker 容器使用 **`entrypoint.sh`** 作为入口脚本，负责：
+
+1. **加载环境变量**：如果存在 `/app/.env` 文件，会自动加载（作为 docker-compose environment 的补充）
+2. **检查目录结构**：自动创建必要的目录（logs, output, data, backups）
+3. **启动服务**：按顺序启动 Nginx → Cron → FastAPI 后端
+
+**这意味着：**
+- ✅ 你可以将 `.env` 文件复制到容器中，它会被自动加载
+- ✅ 所有配置优先使用 docker-compose.yml 中定义的环境变量
+- ✅ `.env` 文件仅作为备用配置源
+
 ### 步骤 1：准备数据目录
 
 ```bash
@@ -199,7 +261,7 @@ chmod -R 755 ~/doculogic
 
 ```bash
 cd /path/to/DocuLogic
-# 推荐：启动容器后在后台「模型配置」中下载（路径统一为 weights/转换器名称）
+# 推荐：启动容器后在后台「模型配置」中下载（路径统一为 weights/文档解析器名称）
 # 或手动从 HuggingFace 下载后解压到 MODEL_DIR 对应宿主机目录：
 # https://huggingface.co/Logics-MLLM/Logics-Parsing-v2
 ```
@@ -220,7 +282,7 @@ nano .env
 # JWT 密钥（生产环境务必修改！）
 JWT_SECRET=$(openssl rand -hex 32)
 
-# 模型路径（容器内路径，与 compose 默认一致；须指向含 config.json 的转换器目录）
+# 模型路径（容器内路径，与 compose 默认一致；须指向含 config.json 的文档解析器目录）
 MODEL_PATH=/app/weights/logics-parsing-v2
 
 # 输出目录（容器内路径，与 compose 默认一致）
@@ -315,7 +377,7 @@ docker compose up -d
 
 ```
 ~/doculogic/
-├── weights/                  # 模型权重（按转换器分子目录，如 logics-parsing-v2/）
+├── weights/                  # 模型权重（按文档解析器分子目录，如 logics-parsing-v2/）
 │   └── Logics-Parsing-v2/   # 模型文件
 ├── data/
 │   ├── output/              # 解析输出结果
@@ -354,76 +416,116 @@ docker compose down
 # 重启服务
 docker compose restart
 
-# 重新构建并启动
-docker compose up -d --build
-
-# 查看运行状态
+# 查看服务状态
 docker compose ps
 ```
 
-### 日志查看
+### 📝 日志查看（重要）
+
+Docker 环境有两套日志系统，根据问题类型选择：
+
+#### 1️⃣ **应用业务日志**（推荐用于排查 API 错误、数据库问题）
 
 ```bash
-# 查看所有日志
-docker compose logs -f
-
-# 仅查看主应用日志
-docker logs -f doculogic
+# 实时查看应用日志（结构化，包含时间戳、级别、模块）
+docker exec doculogic tail -f /app/logs/app.log
 
 # 查看最近 100 行
-docker logs --tail 100 doculogic
+docker exec doculogic tail -n 100 /app/logs/app.log
 
-# 导出日志到文件
-docker logs doculogic > doculogic.log 2>&1
+# 搜索错误
+docker exec doculogic grep "ERROR" /app/logs/app.log
+
+# 导出日志到本地
+docker cp doculogic:/app/logs/app.log ./app.log
 ```
 
-### 进入容器
+**日志格式示例：**
+```
+2026-05-01 17:17:33,821 | INFO | app.cache | ✅ Redis 连接成功: localhost:6379/0
+2026-05-01 17:17:33,821 | ERROR | app.routers.upload | ❌ 文件上传失败: ...
+```
+
+#### 2️⃣ **容器运行日志**（推荐用于排查启动失败、进程崩溃）
 
 ```bash
-# 进入主应用容器
+# 实时查看容器 stdout/stderr
+docker logs -f doculogic
+
+# 查看最近 50 行
+docker logs --tail 50 doculogic
+
+# 查看特定时间段
+docker logs --since 10m doculogic  # 最近 10 分钟
+```
+
+**日志内容：**
+- Nginx 启动信息
+- Cron 定时任务执行记录
+- FastAPI 启动过程
+- print() 语句输出
+
+#### 3️⃣ **其他服务日志**
+
+```bash
+# Redis 日志
+docker logs doculogic-redis
+
+# MySQL/MariaDB/PostgreSQL 日志（根据配置）
+docker logs doculogic-mysql
+docker logs doculogic-mariadb
+docker logs doculogic-postgresql
+```
+
+### 🛠️ 调试与维护
+
+```bash
+# 进入容器 shell
 docker exec -it doculogic bash
 
-# 进入 Redis 容器
-docker exec -it redis redis-cli
+# 检查容器健康状态
+docker inspect --format='{{.State.Health.Status}}' doculogic
 
-# 查看容器资源占用
+# 查看容器资源使用
 docker stats doculogic
+
+# 查看环境变量
+docker exec doculogic env | grep -E "(JWT|DATABASE|MODEL)"
+
+# 测试后端健康检查
+docker exec doculogic curl -s http://localhost:8000/health
+
+# 测试 Nginx 代理
+docker exec doculogic curl -s http://localhost/health
 ```
 
-### 数据管理
+### 💾 数据备份
 
 ```bash
-# 备份数据库
-docker cp doculogic:/app/data/database/app.db ./backup_$(date +%Y%m%d).db
+# 手动备份 SQLite 数据库
+docker cp doculogic:/app/web/data/app.db ./backup_$(date +%Y%m%d).db
 
-# 清理旧任务（保留最近7天）
-docker exec doculogic python -c "
-from app.database import SessionLocal
-from app.models import ParseJob
-from datetime import datetime, timedelta
-db = SessionLocal()
-cutoff = datetime.utcnow() - timedelta(days=7)
-db.query(ParseJob).filter(ParseJob.created_at < cutoff).delete()
-db.commit()
-print('清理完成')
-"
+# 使用内置备份脚本（每天凌晨 2 点自动执行）
+docker exec doculogic bash /app/backup_database.sh
 
-# 清理 Docker 缓存
-docker system prune -a
+# 备份整个数据目录
+tar czf doculogic_backup_$(date +%Y%m%d).tar.gz ~/doculogic/
 ```
 
-### 更新版本
+### 🔄 更新与重建
 
 ```bash
 # 拉取最新代码
 git pull origin main
 
 # 重新构建并启动
-./docker/deploy.sh
-
-# 或手动更新
+cd docker
 docker compose down
-docker compose up -d --build
+docker compose build --no-cache
+docker compose up -d
+
+# 仅重建应用容器（保留数据库）
+docker compose up -d --build doculogic
 ```
 
 ---

@@ -7,6 +7,39 @@ echo "  DocuLogic 一键部署"
 echo "========================================="
 echo ""
 
+# 解析命令行参数
+FORCE_COPY=false
+SKIP_MIGRATION=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -f|--force-copy)
+            FORCE_COPY=true
+            echo "🔄 启用强制覆盖模式"
+            shift
+            ;;
+        --skip-migration)
+            SKIP_MIGRATION=true
+            echo "⏭️  跳过数据迁移"
+            shift
+            ;;
+        -h|--help)
+            echo "用法: ./docker/deploy.sh [选项]"
+            echo ""
+            echo "选项:"
+            echo "  -f, --force-copy     强制覆盖目标数据库文件（即使已存在）"
+            echo "  --skip-migration     跳过自动数据迁移"
+            echo "  -h, --help           显示此帮助信息"
+            exit 0
+            ;;
+        *)
+            echo "❌ 未知参数: $1"
+            echo "使用 -h 或 --help 查看帮助"
+            exit 1
+            ;;
+    esac
+done
+
 # 获取脚本所在目录的父目录（项目根目录）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -14,10 +47,23 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # 切换到项目根目录
 cd "${PROJECT_ROOT}"
 
-# 配置
-DATA_DIR="${DATA_DIR:-${HOME}/doculogic/data}"
-MODEL_DIR="${MODEL_DIR:-${HOME}/doculogic/weights}"
-HOST_PORT="${HOST_PORT:-8030}"
+# 📌 优先从 .env 文件加载配置，再设置默认值
+if [ -f .env ]; then
+    # 从 .env 提取关键配置
+    ENV_DATA_DIR=$(grep -E '^DATA_DIR=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
+    ENV_MODEL_DIR=$(grep -E '^MODEL_DIR=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
+    ENV_HOST_PORT=$(grep -E '^HOST_PORT=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
+    
+    # 如果 .env 中有定义，则使用；否则使用默认值
+    DATA_DIR="${ENV_DATA_DIR:-${HOME}/doculogic/data}"
+    MODEL_DIR="${ENV_MODEL_DIR:-${HOME}/doculogic/weights}"
+    HOST_PORT="${ENV_HOST_PORT:-8030}"
+else
+    # 没有 .env 文件时使用默认值
+    DATA_DIR="${HOME}/doculogic/data"
+    MODEL_DIR="${HOME}/doculogic/weights"
+    HOST_PORT="8030"
+fi
 
 echo "📁 数据目录: ${DATA_DIR}"
 echo "📦 模型目录: ${MODEL_DIR}"
@@ -36,7 +82,15 @@ echo "✓ Docker 运行正常"
 echo ""
 
 # 1. 检查并提示目录结构
-echo "[1/5] 检查数据目录..."
+echo "[1/7] 检查数据目录..."
+
+# 📌 验证 DATA_DIR 路径解析是否正确（避免波浪号 ~ 未展开的问题）
+if [[ "$DATA_DIR" == ~* ]]; then
+    echo "⚠️  警告：DATA_DIR 包含波浪号 (~)，可能导致路径解析错误"
+    echo "   当前值: $DATA_DIR"
+    echo "   建议修改 .env 中的 DATA_DIR 为绝对路径，如: ${HOME}/doculogic/data"
+    echo ""
+fi
 
 # 仅检查根目录是否存在，不存在则创建
 if [ ! -d "${DATA_DIR}" ]; then
@@ -72,13 +126,13 @@ fi
 echo "✓ 目录结构检查完成"
 echo ""
 
-# 2. 检查本地转换器源码目录（不提交到 Git，需要用户提前准备）
+# 2. 检查本地文档解析器源码目录（不提交到 Git，需要用户提前准备）
 echo "[2/7] 检查 converts/models 依赖目录..."
 MODELS_DIR="${PROJECT_ROOT}/converts/models"
 if [ ! -d "${MODELS_DIR}" ] || [ -z "$(ls -A "${MODELS_DIR}" 2>/dev/null)" ]; then
     echo "❌ 目录为空或不存在: ${MODELS_DIR}"
     echo ""
-    echo "请先下载并放置至少一个转换器源码目录后再部署。"
+    echo "请先下载并放置至少一个文档解析器源码目录后再部署。"
     echo "说明：converts/models 已配置为不提交到 GitHub，需要部署方本地准备。"
     exit 1
 fi
@@ -118,106 +172,111 @@ else
 fi
 echo ""
 
-# 3.5. 数据迁移（如果切换到外部数据库）
+# 3.5. 数据迁移（智能自动迁移）
 echo "[3.5/7] 检查数据库迁移..."
 
 # 读取 DATABASE_TYPE（去除注释和空格）
 DATABASE_TYPE=$(grep -E '^DATABASE_TYPE=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
 DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
 
-# 获取数据目录
-DATA_DIR="${DATA_DIR:-${HOME}/doculogic}"
-
-echo ""
-echo "⚠️  重要提示：切换数据库类型会导致数据隔离"
-echo "   每种数据库类型使用独立的存储路径："
-echo "   - SQLite:    ${DATA_DIR}/data/database/sqlite"
-echo "   - MySQL:     ${DATA_DIR}/data/database/mysql"
-echo "   - MariaDB:   ${DATA_DIR}/data/database/mariadb"
-echo "   - PostgreSQL: ${DATA_DIR}/data/database/postgresql"
-echo ""
-echo "   如果您之前使用过其他数据库类型，需要先迁移数据！"
-echo "   请使用 scripts/convert_sqlite_to_other.py 进行数据转换。"
 echo ""
 
+# 智能迁移逻辑：如果从 SQLite 切换到其他数据库，自动执行迁移
 case "$DATABASE_TYPE" in
-    mysql)
-        echo "📊 检测到使用 MySQL 数据库"
+    mysql|mariadb|postgresql|postgres|pg)
+        # 检查是否存在 SQLite 数据且目标数据库为空
+        # DATA_DIR 默认为 ~/doculogic/data，所以完整路径是 ~/doculogic/data/database/sqlite/app.db
+        SQLITE_DB_PATH="${DATA_DIR}/database/sqlite/app.db"
         
-        # 检查是否有其他数据库的数据
-        if [ -d "${DATA_DIR}/data/database/sqlite" ] && [ -f "${DATA_DIR}/data/database/sqlite/app.db" ]; then
-            echo "⚠️  发现 SQLite 数据库数据！"
-            echo "   路径: ${DATA_DIR}/data/database/sqlite/app.db"
-            echo ""
-            echo "   如果不迁移数据，MySQL 将从空数据库开始，所有配置将丢失！"
-            echo ""
-            read -p "   是否现在从 SQLite 导出数据到 MySQL? [y/N]: " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                echo "🔄 开始导出数据..."
-                if python3 scripts/convert_sqlite_to_other.py export; then
-                    echo "✅ 数据导出成功: web/data/mysql.sql"
-                    echo "   Docker 启动后将自动导入到 MySQL"
+        if [ -f "$SQLITE_DB_PATH" ]; then
+            echo "📊 检测到 SQLite 数据库: $SQLITE_DB_PATH"
+            
+            # 检查目标数据库是否已有数据
+            TARGET_HAS_DATA=false
+            case "$DATABASE_TYPE" in
+                mysql)
+                    if [ -d "${DATA_DIR}/database/mysql" ] && [ "$(ls -A ${DATA_DIR}/database/mysql 2>/dev/null)" ]; then
+                        TARGET_HAS_DATA=true
+                    fi
+                    ;;
+                mariadb)
+                    if [ -d "${DATA_DIR}/database/mariadb" ] && [ "$(ls -A ${DATA_DIR}/database/mariadb 2>/dev/null)" ]; then
+                        TARGET_HAS_DATA=true
+                    fi
+                    ;;
+                postgresql|postgres|pg)
+                    if [ -d "${DATA_DIR}/database/postgresql" ] && [ "$(ls -A ${DATA_DIR}/database/postgresql 2>/dev/null)" ]; then
+                        TARGET_HAS_DATA=true
+                    fi
+                    ;;
+            esac
+            
+            if [ "$TARGET_HAS_DATA" = false ]; then
+                echo "✅ 检测到您正在从 SQLite 切换到 $(echo $DATABASE_TYPE | tr 'a-z' 'A-Z')"
+                echo "   将自动迁移数据以保持业务连续性..."
+                echo ""
+                
+                # 确定输出文件名
+                case "$DATABASE_TYPE" in
+                    mysql)
+                        OUTPUT_FILE="web/data/mysql.sql"
+                        DB_NAME="MySQL"
+                        ;;
+                    mariadb)
+                        OUTPUT_FILE="web/data/mariadb.sql"
+                        DB_NAME="MariaDB"
+                        ;;
+                    postgresql|postgres|pg)
+                        OUTPUT_FILE="web/data/postgresql.sql"
+                        DB_NAME="PostgreSQL"
+                        ;;
+                esac
+                
+                echo "🔄 开始从 SQLite 导出到 $DB_NAME..."
+                if python3 scripts/convert_sqlite_to_other.py export --output "$OUTPUT_FILE"; then
+                    echo "✅ 数据导出成功: $OUTPUT_FILE"
+                    echo "   Docker 启动后将自动导入到 $DB_NAME"
+                    echo "   📌 SQLite 原始数据已保留，如需回滚可随时恢复"
                 else
                     echo "❌ 数据导出失败"
-                    exit 1
+                    echo "   请手动运行: python3 scripts/convert_sqlite_to_other.py export --output $OUTPUT_FILE"
+                    read -p "   是否继续部署（使用空数据库）？[y/N]: " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                        echo "❌ 部署已取消"
+                        exit 1
+                    fi
                 fi
             else
-                echo "⚠️  您选择了跳过迁移，MySQL 将从空数据库开始"
-                echo "   如需稍后迁移，请运行: python3 scripts/convert_sqlite_to_other.py export"
+                echo "ℹ️  检测到 $DB_NAME 已有数据，跳过自动迁移"
+                echo "   如需从 SQLite 迁移，请先清空目标数据库目录或手动运行迁移脚本"
             fi
-        elif [ -d "${DATA_DIR}/data/database/mariadb" ]; then
-            echo "⚠️  发现 MariaDB 数据目录，但当前选择的是 MySQL"
-            echo "   这两个数据库不共享数据！"
-        fi
-        ;;
-    
-    mariadb)
-        echo "📊 检测到使用 MariaDB 数据库"
-        
-        # 检查是否有其他数据库的数据
-        if [ -d "${DATA_DIR}/data/database/sqlite" ] && [ -f "${DATA_DIR}/data/database/sqlite/app.db" ]; then
-            echo "⚠️  发现 SQLite 数据库数据！"
-            echo "   路径: ${DATA_DIR}/data/database/sqlite/app.db"
-            echo ""
-            echo "   如果不迁移数据，MariaDB 将从空数据库开始，所有配置将丢失！"
-            echo ""
-            read -p "   是否现在从 SQLite 导出数据到 MariaDB? [y/N]: " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                echo "🔄 开始导出数据..."
-                if python3 scripts/convert_sqlite_to_other.py export --output web/data/mariadb.sql; then
-                    echo "✅ 数据导出成功: web/data/mariadb.sql"
-                    echo "   Docker 启动后将自动导入到 MariaDB"
-                else
-                    echo "❌ 数据导出失败"
-                    exit 1
-                fi
-            else
-                echo "⚠️  您选择了跳过迁移，MariaDB 将从空数据库开始"
-                echo "   如需稍后迁移，请运行: python3 scripts/convert_sqlite_to_other.py export --output web/data/mariadb.sql"
-            fi
-        elif [ -d "${DATA_DIR}/data/database/mysql" ]; then
-            echo "⚠️  发现 MySQL 数据目录，但当前选择的是 MariaDB"
-            echo "   这两个数据库不共享数据！"
-        fi
-        ;;
-    
-    postgresql|postgres|pg)
-        echo "ℹ️  检测到使用 PostgreSQL 数据库"
-        
-        POSTGRESQL_SQL="web/data/postgresql.sql"
-        if [ -f "$POSTGRESQL_SQL" ]; then
-            echo "✅ 找到 PostgreSQL 初始化文件: $POSTGRESQL_SQL"
-            echo "   Docker 启动后将自动导入数据"
         else
-            echo "⚠️  未找到 PostgreSQL 初始化文件"
-            echo "   请确保 web/data/postgresql.sql 存在"
+            echo "ℹ️  未检测到 SQLite 数据，$DB_NAME 将从空数据库开始"
         fi
         ;;
     
     sqlite)
         echo "✓ 使用 SQLite 数据库，无需迁移"
+        
+        # 📌 Docker 部署策略：让容器启动时自动创建数据库
+        # 容器挂载点：${DATA_DIR}/database/sqlite -> /app/web/data (容器内)
+        # 应用启动时会通过 database.py 的 init_db() 自动创建 app.db
+        
+        SQLITE_DST_DIR="${DATA_DIR}/database/sqlite"
+        
+        # 确保目标目录存在（Docker 会以 root 权限创建）
+        if [ ! -d "$SQLITE_DST_DIR" ]; then
+            mkdir -p "$SQLITE_DST_DIR"
+            echo "   ℹ️  已创建数据库目录: $SQLITE_DST_DIR"
+        fi
+        
+        # 检查是否已有数据库文件
+        if [ -f "${SQLITE_DST_DIR}/app.db" ]; then
+            echo "   ℹ️  检测到现有数据库，将直接使用"
+        else
+            echo "   ℹ️  未检测到数据库文件，容器启动后将自动创建"
+        fi
         ;;
     
     *)
@@ -301,12 +360,25 @@ if [ -f .env ]; then
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
         [[ -z "$(echo "$line" | tr -d '[:space:]')" ]] && continue
         
-        # 提取键值对（去除行尾注释）
-        key=$(echo "$line" | cut -d'=' -f1 | tr -d '[:space:]')
-        value=$(echo "$line" | cut -d'=' -f2- | sed 's/#.*//' | sed 's/^["'\'']*//;s/["'\'']*$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # 提取键（第一个 = 之前的部分）
+        key="${line%%=*}"
+        key=$(echo "$key" | tr -d '[:space:]')
         
         # 跳过无效行
         [[ -z "$key" ]] && continue
+        
+        # 提取值（第一个 = 之后的所有内容）
+        value="${line#*=}"
+        
+        # 去除行尾注释（但保留值中的 # 号，如 URL 中的 fragment）
+        # 只有当 # 前面有空格时才视为注释
+        value=$(echo "$value" | sed 's/[[:space:]]#.*$//')
+        
+        # 去除首尾引号（支持单引号和双引号）
+        value=$(echo "$value" | sed "s/^[\"']//;s/[\"']$//")
+        
+        # 去除首尾空格
+        value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         
         # 导出变量
         export "$key"="$value"
@@ -361,14 +433,22 @@ echo ""
 # 7. 验证部署
 echo "[7/7] 验证部署..."
 echo "等待服务启动..."
-sleep 5
 
-# 健康检查
-if curl -s http://localhost:${HOST_PORT}/health > /dev/null 2>&1; then
-    echo "✅ 服务运行正常"
-else
-    echo "⚠️  服务可能还在启动中，请稍后访问"
-    echo "查看日志: cd docker && docker compose logs -f"
+# 健康检查重试机制（最多等待 60 秒）
+HEALTH_CHECK_PASSED=false
+for i in $(seq 1 30); do
+    if curl -s http://localhost:${HOST_PORT}/health > /dev/null 2>&1; then
+        echo "✅ 服务运行正常（第 $i 次检查通过）"
+        HEALTH_CHECK_PASSED=true
+        break
+    fi
+    echo "⏳ 等待服务启动... ($i/30)"
+    sleep 2
+done
+
+if [ "$HEALTH_CHECK_PASSED" = false ]; then
+    echo "⚠️  服务启动超时，请检查日志"
+    echo "查看日志: cd docker && docker compose logs -f doculogic"
 fi
 
 echo ""

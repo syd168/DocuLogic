@@ -143,7 +143,6 @@
           :clear-model-files="clearModelFiles"
           :reload-model="reloadModel"
           :unload-model="unloadModel"
-          :check-paddle-config="checkPaddleConfig"
           :converter-config-data="converterConfigData"
           :converter-config-loading="converterConfigLoading"
           :converter-config-saving="converterConfigSaving"
@@ -152,6 +151,8 @@
           :save-converter-config="saveConverterConfig"
           :update-converter-config-field="updateConverterConfigField"
           :update-converter-config-download-field="updateConverterConfigDownloadField"
+          :check-converter-config="checkConverterConfig"
+          @update:converter-config-data="(v) => { converterConfigData = v }"
           @update:dl-source="(v) => (dlSource = v)"
         />
 
@@ -504,7 +505,7 @@ const {
   checkModelStatus,
   reloadModel,
   unloadModel,
-  checkPaddleConfig,
+  checkConverterConfig,
   disposeAdminSettings,
 } = useWorkspaceSettings({
   http,

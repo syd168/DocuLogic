@@ -110,7 +110,7 @@ class AppSettings(Base):
     captcha_forgot_enabled: Mapped[bool] = mapped_column(Boolean, default=False)  # 找回密码时是否启用验证码
     pdf_max_pages: Mapped[int] = mapped_column(Integer, default=80)  # PDF 最大解析页数（全局默认）
     output_dir: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)  # 解析输出目录路径
-    default_converter_id: Mapped[str] = mapped_column(String(64), default="logics-parsing-v2")  # 默认转换器 ID
+    default_converter_id: Mapped[str] = mapped_column(String(64), default="logics-parsing-v2")  # 默认文档解析器 ID
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # 最后更新时间
     # 邮件（SMTP）；密码仅存库内，接口不回显
     email_mock: Mapped[bool] = mapped_column(Boolean, default=True)  # 是否使用模拟邮件（打印到日志）

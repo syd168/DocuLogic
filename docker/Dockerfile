@@ -48,11 +48,11 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.huaweiclou
 # 复制后端代码
 COPY web/ ./web/
 COPY web_server.py .
-# 复制转换器中间件/插件/配置（运行时必需）
+# 复制文档解析器中间件/插件/配置（运行时必需）
 COPY converts/middleware/ ./converts/middleware/
 COPY converts/plugins/ ./converts/plugins/
 COPY converts/configs/ ./converts/configs/
-# 复制本地预置转换器源码目录（由部署方提前下载，不纳入 Git）
+# 复制本地预置文档解析器源码目录（由部署方提前下载，不纳入 Git）
 COPY converts/models/ ./converts/models/
 
 # 复制前端构建产物到 Nginx
@@ -76,23 +76,16 @@ RUN echo "0 2 * * * cd /app && bash backup_database.sh >> /app/backups/backup.lo
     && chmod 0644 /etc/cron.d/doculogic-backup \
     && crontab /etc/cron.d/doculogic-backup
 
-# 设置环境变量
-ENV PYTHONUNBUFFERED=1 \
-    BACKEND_PORT=8000 \
-    FRONTEND_PORT=80 \
-    MODEL_PATH=/app/weights/logics-parsing-v2 \
-    OUTPUT_DIR=/data/output \
-    ENVIRONMENT=development \
-    JWT_SECRET=change-me-in-production \
-    CORS_ORIGINS=http://localhost:8030,http://127.0.0.1:8030,http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173
+# 复制入口脚本
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # 暴露端口（仅前端端口）
 EXPOSE 80
 
-# 健康检查：同时检查 Nginx、后端服务和数据库连接
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/health && \
-        curl -f http://localhost:8000/health || exit 1
+# 健康检查：通过 Nginx 检查后端服务状态
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost/health || exit 1
 
-# 启动脚本：同时运行 Nginx、cron 和后端
-CMD bash -c "nginx && cron && python web_server.py"
+# 使用入口脚本启动所有服务
+CMD ["/app/entrypoint.sh"]

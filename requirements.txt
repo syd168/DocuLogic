@@ -86,21 +86,3 @@ redis>=5.0.0,<6.0.0
 tqdm>=4.67.0,<5.0.0  # 进度条
 
 
-#============for panddleocr v3.5============
-shapely
-scikit-image
-pyclipper
-lmdb
-tqdm
-numpy
-rapidfuzz
-opencv-python
-opencv-contrib-python
-cython
-Pillow
-pyyaml
-requests
-albumentations
-# to be compatible with albumentations
-albucore
-packaging

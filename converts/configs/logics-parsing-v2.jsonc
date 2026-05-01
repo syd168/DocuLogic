@@ -1,4 +1,24 @@
 {
+  "prompt": "QwenVL HTML",
+  "output_format": "markdown",
+  "temperature": 0.3,
+  "max_pdf_pages": 5000,
+  "download": {
+    "mode": "snapshot",
+    "dest_dir": "weights/logics-parsing-v2",
+    "repos": {
+      "huggingface": "Logics-MLLM/Logics-Parsing-v2",
+      "modelscope": "Alibaba-DT/Logics-Parsing-v2"
+    }
+  },
+  "_meta": {
+    "engine_id": "logics-parsing-v2",
+    "version": "2.0",
+    "description": "Logics-Parsing v2 智能文档解析文档解析器（支持 STEM、复杂版面、Parsing-2.0）"
+  },
+  "enable_table_recognition": true,
+  "enable_formula_recognition": true,
+  "enable_layout_recognition": true,
   "_ui": {
     "order": [
       "prompt",
@@ -10,16 +30,12 @@
     },
     "hints": {
       "prompt": "用于控制 Logics 解析输出风格（如 QwenVL HTML）。",
-      "download": "下载按钮会按该配置执行。"
+      "download": "下载按钮会按该配置执行。模型将下载到 dest_dir 指定的目录。"
     }
   },
-  "prompt": "QwenVL HTML",
-  "download": {
-    "mode": "snapshot",
-    "dest_dir": "weights/logics-parsing-v2",
-    "repos": {
-      "huggingface": "Logics-MLLM/Logics-Parsing-v2",
-      "modelscope": "Alibaba-DT/Logics-Parsing-v2"
-    }
-  }
+  "device_mode": "cpu",
+  "formula_detection_model": "yolo_v8_mfd",
+  "formula_recognition_model": "unimernet_small",
+  "layout_model": "layoutlmv3",
+  "enable_plugins": false
 }

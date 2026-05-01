@@ -6,7 +6,6 @@ services:
       dockerfile: docker/Dockerfile
     container_name: doculogic
     restart: unless-stopped
-    runtime: nvidia
     
     # 仅暴露前端端口 80，后端通过 Nginx 内部代理
     ports:
@@ -28,14 +27,11 @@ services:
     environment:
       # 运行环境（production/prod 会强制检查 JWT_SECRET）
       - ENVIRONMENT=${ENVIRONMENT:-development}
-      # JWT 密钥（生产环境务必修改）
+      # JWT 密钥（生产环境务必修改，deploy.sh 会自动生成随机值）
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
-      # 模型快照目录（须含 config.json 等），默认当前转换器 logics-parsing-v2
-      - MODEL_PATH=./weights/logics-parsing-v2
       # 输出目录
       - OUTPUT_DIR=/data/output
-      # CORS 配置
-      # 须与浏览器访问来源一致（含端口）；默认覆盖常见本机访问方式
+      # CORS 配置（须与浏览器访问来源一致，含端口）
       - CORS_ORIGINS=http://localhost:8030,http://127.0.0.1:8030,http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173
       # 管理员用户名（可选）
       - ADMIN_USERNAMES=${ADMIN_USERNAMES:-admin}
@@ -75,6 +71,10 @@ services:
       - PG_DATABASE=${PG_DATABASE:-doculogic}
       # 数据备份时间
       - RETENTION_DAYS=30  # 保留 30 天
+      
+      # ========== 模型路径配置（可选，默认使用自动发现机制）==========
+      # 如需指定特定转换器路径，可在此设置（不推荐硬编码）
+      # - MODEL_PATH_LOGICS_PARSING_V2=/app/weights/logics-parsing-v2
     
     # GPU 支持
     deploy:
@@ -151,11 +151,13 @@ services:
     restart: unless-stopped
     profiles:
       - mysql  # 使用 --profile mysql 启用
+    
+    # 📌 移除 mysqld 前缀，直接传递参数给官方入口点
     command: >
-      mysqld
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
       --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=1G
     
     # 环境变量
     environment:
@@ -200,10 +202,12 @@ services:
     restart: unless-stopped
     profiles:
       - mariadb  # 使用 --profile mariadb 启用
+    
+    # 📌 移除手动 command 中的 mysqld 前缀，保留参数传递给官方入口点脚本
     command: >
-      mysqld
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=1G
     
     # 环境变量
     environment:
@@ -250,10 +254,13 @@ services:
     restart: unless-stopped
     profiles:
       - postgresql  # 使用 --profile postgresql 启用
+    
+    # 📌 移除 postgres 前缀，直接传递参数给官方入口点
     command: >
-      postgres
       -c max_connections=200
       -c shared_buffers=256MB
+      -c work_mem=4MB
+      -c effective_cache_size=1GB
     
     # 环境变量
     environment:

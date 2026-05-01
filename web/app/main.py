@@ -463,6 +463,9 @@ async def startup_event():
     logging.getLogger("app").info("文件日志: %s", PROJECT_ROOT / "logs" / "app.log")
     init_db()
     
+    # 同步数据库中的解析器配置与代码中实际发现的插件
+    _sync_converter_config_with_discovery()
+    
     # 注意：不再在启动时加载模型，改为懒加载
     print("\n🚀 应用启动完成！")
     print("💡 提示：模型将在首次上传文档时自动加载（懒加载模式）")
@@ -613,6 +616,49 @@ def _cleanup_expired_codes(db: Session) -> int:
         logging.getLogger("app").info(f"启动时清理 {deleted_count} 个过期验证码")
     
     return deleted_count
+
+
+def _sync_converter_config_with_discovery() -> None:
+    """
+    同步数据库中的解析器配置与代码中实际发现的插件。
+    
+    逻辑：
+    1. 获取当前代码中通过自动发现机制加载的所有 engine_id。
+    2. 检查数据库中 app_settings.default_converter_id 是否指向一个有效的 engine_id。
+    3. 如果无效（例如插件已被删除），则重置为默认值 'logics-parsing-v2'（如果存在）或第一个可用的插件。
+    """
+    from converts.middleware.registry import list_plugins
+    from .models import AppSettings
+    
+    db = SessionLocal()
+    try:
+        # 1. 获取当前可用的解析器列表
+        available = list_plugins()
+        if not available:
+            logging.getLogger("app").warning("⚠️ 启动时未发现任何可用的文档解析器插件！")
+            return
+            
+        # 2. 检查并修正 default_converter_id
+        row = db.query(AppSettings).filter(AppSettings.id == 1).first()
+        if not row:
+            return
+            
+        current_default = getattr(row, "default_converter_id", None)
+        
+        # 如果当前默认值不在可用列表中，进行修正
+        if current_default not in available:
+            fallback_id = "logics-parsing-v2" if "logics-parsing-v2" in available else next(iter(available.keys()))
+            logging.getLogger("app").warning(
+                f"⚠️ 数据库中配置的默认解析器 '{current_default}' 已不存在。"
+                f"已自动切换为 '{fallback_id}'"
+            )
+            row.default_converter_id = fallback_id
+            db.commit()
+            
+    except Exception as e:
+        logging.getLogger("app").error(f"同步解析器配置失败: {e}")
+    finally:
+        db.close()
 
 
 @app.get("/")
@@ -785,7 +831,7 @@ async def process_document_task(
         
         if _debug_mode_enabled():
             print(f"[调试] 任务 {job_id}: 图片输出模式={image_output_mode}")  # 移除用户ID，保护隐私
-            print(f"[调试] 任务 {job_id}: 转换器={default_engine_id}")
+            print(f"[调试] 任务 {job_id}: 文档解析器={default_engine_id}")
         
         try:
             if default_engine_id == "logics-parsing-v2":
@@ -805,7 +851,7 @@ async def process_document_task(
                     default_engine_id,
                 )
             else:
-                # 非 logics 转换器：直接走中间件插件路由，避免强依赖 Logics 模型加载
+                # 非 logics 文档解析器：直接走中间件插件路由，避免强依赖 Logics 模型加载
                 converter_runtime_config = read_converter_config(default_engine_id)
                 job_input = ConversionJobInput(
                     engine_id=default_engine_id,

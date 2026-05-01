@@ -25,7 +25,7 @@ from converts.middleware.registry import normalize_engine_id
 if TYPE_CHECKING:
     from .models import User
 
-from .paths import DEFAULT_MODEL_WEIGHTS_DIR, DEFAULT_PARSE_OUTPUT_DIR, PROJECT_ROOT
+from .paths import DEFAULT_PARSE_OUTPUT_DIR, PROJECT_ROOT, get_default_model_weights_dir
 
 _WEB_ROOT = Path(__file__).resolve().parent.parent
 _PROJECT_ROOT = PROJECT_ROOT
@@ -140,50 +140,29 @@ def get_effective_output_dir(db: Session) -> Path:
     return d
 
 
-def get_effective_model_path_str(db: Session) -> Optional[str]:
-    """优先级：环境变量 MODEL_PATH > logics 配置文件 download.dest_dir > 默认目录。"""
-    env = os.environ.get("MODEL_PATH", "").strip()
-    if env:
-        return env
-    # 优先读取转换器配置，确保“下载目录”和“加载目录”严格对齐。
-    cfg = _PROJECT_ROOT / "converts" / "configs" / "logics-parsing-v2.jsonc"
-    if cfg.exists():
-        try:
-            raw = cfg.read_text(encoding="utf-8")
-            raw = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
-            cleaned_lines: list[str] = []
-            for ln in raw.splitlines():
-                in_str = False
-                escaped = False
-                cut = None
-                for i, ch in enumerate(ln):
-                    if escaped:
-                        escaped = False
-                        continue
-                    if ch == "\\" and in_str:
-                        escaped = True
-                        continue
-                    if ch == '"':
-                        in_str = not in_str
-                        continue
-                    if not in_str and ch == "/" and i + 1 < len(ln) and ln[i + 1] == "/":
-                        cut = i
-                        break
-                cleaned_lines.append((ln[:cut] if cut is not None else ln).rstrip())
-            data = json.loads("\n".join(cleaned_lines).strip() or "{}")
-            if isinstance(data, dict):
-                dl = data.get("download")
-                if isinstance(dl, dict):
-                    dest = str(dl.get("dest_dir") or "").strip()
-                    if dest:
-                        p = Path(dest)
-                        if not p.is_absolute():
-                            p = _PROJECT_ROOT / p
-                        return str(p.resolve())
-        except Exception:
-            pass
-    if DEFAULT_MODEL_WEIGHTS_DIR.is_dir():
-        return str(DEFAULT_MODEL_WEIGHTS_DIR.resolve())
+def get_effective_model_path_str(db: Session, engine_id: str = "logics-parsing-v2") -> Optional[str]:
+    """
+    获取指定转换器的有效模型路径。
+    
+    优先级策略（从高到低）：
+    1. 环境变量: MODEL_PATH_<ENGINE_ID>
+    2. 配置文件: converts/configs/<engine_id>.jsonc 中的 download.dest_dir
+    3. 约定目录: weights/<engine_id>/
+    
+    Args:
+        db: 数据库会话（保留参数以保持接口兼容，当前未使用）
+        engine_id: 转换器引擎 ID，默认为 "logics-parsing-v2"
+        
+    Returns:
+        模型路径字符串，如果未找到则返回 None
+        
+    Note:
+        此函数现在委托给 paths.get_default_model_weights_dir() 实现，
+        保持向后兼容的同时支持多转换器架构。
+    """
+    model_path = get_default_model_weights_dir(engine_id)
+    if model_path and model_path.is_dir():
+        return str(model_path)
     return None
 
 
@@ -557,6 +536,22 @@ def settings_to_admin_dict(db: Session) -> dict[str, Any]:
         getattr(row, "default_converter_id", None) or "logics-parsing-v2"
     )
     default_converter_id = normalize_engine_id(stored_default_converter) or "logics-parsing-v2"
+    
+    # 从注册表动态获取可用解析器列表（包含 UI 元数据）
+    from converts.middleware.registry import get_plugins
+    plugins = get_plugins()
+    available_converters = []
+    for eid, plugin in plugins.items():
+        converter_info = {
+            "id": eid,
+            "name": type(plugin).__name__.replace("Plugin", ""),
+            "enabled": True,
+        }
+        # 如果插件提供了 UI 元数据，一并返回
+        if hasattr(plugin, 'ui_meta') and plugin.ui_meta:
+            converter_info["meta"] = plugin.ui_meta
+        available_converters.append(converter_info)
+    
     return {
         "registration_enabled": bool(row.registration_enabled),
         "captcha_login_enabled": bool(row.captcha_login_enabled),
@@ -567,11 +562,7 @@ def settings_to_admin_dict(db: Session) -> dict[str, Any]:
         "effective_output_dir": str(out_eff),
         "effective_model_path": mpath_eff,
         "default_converter_id": default_converter_id,
-        "available_converters": [
-            {"id": "logics-parsing-v2", "name": "Logics-Parsing-v2", "enabled": True},
-            {"id": "paddle-ocr-v3.5", "name": "PaddleOCR-3.5.0", "enabled": True},
-            # 预留：后续可由插件注册表动态返回
-        ],
+        "available_converters": available_converters,
         "updated_at": row.updated_at.isoformat() + "Z" if row.updated_at else None,
         "email_mock": bool(getattr(row, "email_mock", True)),
         "smtp_host": (row.smtp_host or "") if getattr(row, "smtp_host", None) is not None else "",
@@ -650,9 +641,10 @@ def update_settings_from_body(db: Session, body: dict[str, Any]) -> dict[str, An
         v = normalize_engine_id(str(body["default_converter_id"] or "").strip())
         if not v:
             raise ValueError("default_converter_id 不能为空")
-        # 先做白名单兜底；后续接入插件注册表后改为动态校验
-        if v not in ("logics-parsing-v2", "paddle-ocr-v3.5"):
-            raise ValueError("default_converter_id 非法或暂不支持")
+        # 动态校验：确保选择的解析器已注册
+        from converts.middleware.registry import list_plugins
+        if v not in list_plugins():
+            raise ValueError(f"default_converter_id '{v}' 未注册或不存在")
         row.default_converter_id = v[:64]
     if "email_mock" in body:
         row.email_mock = bool(body["email_mock"])

@@ -9,59 +9,19 @@ from .paths import PROJECT_ROOT
 CONVERTER_CONFIG_DIR = PROJECT_ROOT / "converts" / "configs"
 _ENGINE_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
-DEFAULT_CONFIG_TEMPLATES: dict[str, str] = {
-    "logics-parsing-v2": """{
-  "_ui": {
-    "order": [
-      "prompt",
-      "download"
-    ],
-    "labels": {
-      "prompt": "提示词模板",
-      "download": "模型下载配置"
-    },
-    "hints": {
-      "prompt": "用于控制 Logics 解析输出风格（如 QwenVL HTML）。",
-      "download": "下载按钮会按该配置执行。"
-    }
-  },
-  // Logics-Parsing-v2 运行参数
-  "prompt": "QwenVL HTML",
-  // 下载配置（前端“下载模型文件”按钮读取这里）
-  "download": {
-    "mode": "snapshot",
-    "dest_dir": "weights/logics-parsing-v2",
-    "repos": {
-      "huggingface": "Logics-MLLM/Logics-Parsing-v2",
-      "modelscope": "Alibaba-DT/Logics-Parsing-v2"
-    }
-  }
-}
-""",
-    "paddle-ocr-v3.5": """{
-  // api | local
-  "runtime_mode": "api",
-  // PaddleOCR API endpoint, must end with /layout-parsing
-  "api_url": "https://your-service.example.com/layout-parsing",
-  // PaddleOCR access token
-  "access_token": "replace-with-token",
-  // HTTP timeout in seconds
-  "timeout_seconds": 600,
-  // Pipeline switches
-  "use_doc_unwarping": false,
-  "use_doc_orientation_classify": false,
-  "visualize": false,
-  // Additional options forwarded to parse_document(**extra_options).
-  // Check PaddleOCR docs for parse_document/API optional fields.
-  "extra_options": {},
-  // local mode command (optional): placeholders {input_path} {output_dir} {job_id}
-  "local_command": "",
-  // local mode markdown output path template (optional)
-  "local_output_markdown": "{output_dir}/{job_id}.md",
-  "local_output_raw": "{output_dir}/{job_id}_raw.md"
-}
-""",
-}
+
+def _get_default_template_from_plugin(engine_id: str) -> str | None:
+    """尝试从已注册的插件中获取默认配置模板。"""
+    try:
+        from converts.middleware.registry import get_plugin
+        plugin = get_plugin(engine_id)
+        if hasattr(plugin, 'default_config') and plugin.default_config:
+            import json
+            # 如果已经是对象化格式，直接返回；如果是旧格式，可能需要转换
+            return json.dumps(plugin.default_config, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    return None
 
 
 def _validate_engine_id(engine_id: str) -> str:
@@ -112,7 +72,7 @@ def parse_jsonc(text: str) -> dict:
     except Exception as exc:
         raise ValueError(f"配置文件不是合法 JSON/JSONC: {exc}") from exc
     if not isinstance(data, dict):
-        raise ValueError("转换器配置必须是 JSON 对象")
+        raise ValueError("文档解析器配置必须是 JSON 对象")
     return data
 
 
@@ -120,7 +80,10 @@ def ensure_converter_config(engine_id: str) -> Path:
     path = _config_path(engine_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
-        default_text = DEFAULT_CONFIG_TEMPLATES.get(engine_id, "{\n  // custom converter config\n}\n")
+        # 优先从插件获取默认配置，其次使用通用模板
+        default_text = _get_default_template_from_plugin(engine_id)
+        if not default_text:
+            default_text = "{\n  // custom parser config\n}\n"
         path.write_text(default_text, encoding="utf-8")
     return path
 
@@ -131,7 +94,33 @@ def read_converter_config_text(engine_id: str) -> str:
 
 
 def read_converter_config(engine_id: str) -> dict:
-    return parse_jsonc(read_converter_config_text(engine_id))
+    """读取配置并与插件默认配置合并，确保新增字段有默认值。"""
+    file_data = parse_jsonc(read_converter_config_text(engine_id))
+    
+    # 获取插件定义的默认配置
+    try:
+        from converts.middleware.registry import get_plugin
+        plugin = get_plugin(engine_id)
+        default_data = getattr(plugin, 'default_config', {})
+        
+        if default_data and isinstance(default_data, dict):
+            # 深度合并：文件配置优先，缺失项使用默认配置
+            merged = _deep_merge(default_data, file_data)
+            return merged
+    except Exception:
+        pass
+        
+    return file_data
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """递归合并两个字典，override 优先级更高。"""
+    result = base.copy()
+    for k, v in override.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
 
 
 def write_converter_config_text(engine_id: str, content: str) -> Path:
@@ -143,7 +132,7 @@ def write_converter_config_text(engine_id: str, content: str) -> Path:
 
 def write_converter_config_data(engine_id: str, data: dict) -> Path:
     if not isinstance(data, dict):
-        raise ValueError("转换器配置必须是对象")
+        raise ValueError("文档解析器配置必须是对象")
     path = ensure_converter_config(engine_id)
     text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
     path.write_text(text, encoding="utf-8")

@@ -4,16 +4,16 @@
       <div class="settings-header">
         <h1>
           <span class="settings-icon">🧩</span>
-          模型配置
+          解析器配置
         </h1>
-        <p class="lead">集中管理当前转换器的路径、模型状态与运行操作。</p>
+        <p class="lead">集中管理当前文档解析器的路径、解析器状态与运行操作。</p>
       </div>
 
       <el-alert v-if="settingsLoadError" :title="settingsLoadError" type="error" :closable="false"
         style="margin-bottom: 16px" />
 
       <div v-if="isAdmin" class="admin-settings">
-        <!-- <h3 class="settings-h3">转换器配置（保存至数据库）</h3> -->
+        <!-- <h3 class="settings-h3">文档解析器配置（保存至数据库）</h3> -->
 
         <div class="settings-save-bar settings-save-bar--top">
           <el-button type="primary" :loading="adminSaveLoading" @click="saveAdminSettings">保存到数据库</el-button>
@@ -23,42 +23,36 @@
         <div class="admin-settings-form">
           <div class="model-config-overview">
             <div class="model-config-overview__item">
-              <span class="model-config-overview__label">当前模型：</span>
+              <span class="model-config-overview__label">当前解析器：</span>
               <span class="model-config-overview__value">
                 {{
-                  adminForm.default_converter_id === 'paddle-ocr-v3.5'
-                    ? 'PaddleOCR-3.5.0'
-                    : 'Logics-Parsing-v2'
+                  (() => {
+                    const id = adminForm.default_converter_id
+                    const converter = (adminForm.available_converters || []).find(c => c.id === id)
+                    return converter ? (converter.name || converter.id) : (id || '未选择')
+                  })()
                 }}
               </span>
             </div>
             <div class="model-config-overview__item">
-              <span class="model-config-overview__label">切换模型：</span>
-              <el-select v-model="adminForm.default_converter_id" size="small" style="width: 220px">
-                <el-option v-for="item in ((adminForm.available_converters && adminForm.available_converters.length
-                  ? adminForm.available_converters
-                  : [{ id: 'logics-parsing-v2', name: 'Logics-Parsing-v2', enabled: true }]))" :key="item.id"
+              <span class="model-config-overview__label">切换解析器：</span>
+              <el-select v-model="adminForm.default_converter_id" size="small" style="width: 220px"
+                :disabled="modelStatus.downloading || dlLoading"
+                :placeholder="(adminForm.available_converters && adminForm.available_converters.length) ? '请选择解析器' : '暂无可用解析器'">
+                <el-option v-for="item in (adminForm.available_converters || [])" :key="item.id"
                   :label="item.name || item.id" :value="item.id" />
               </el-select>
             </div>
             <div class="model-config-overview__item">
-              <span class="model-config-overview__label">{{ isPaddle ? '服务状态：' : '模型状态：' }}</span>
-              <el-tag :type="isPaddle ? 'info' : (modelStatus.model_loaded ? 'success' : 'warning')" size="small">
-                {{
-                  isPaddle
-                    ? (String(converterConfigData?.runtime_mode || 'api').toLowerCase() === 'local' ? '本地模式' : 'API 模式')
-                    : (modelStatus.model_loaded ? '已加载' : '未加载')
-                }}
+              <span class="model-config-overview__label">{{ currentConverterMeta?.status_label || '解析器状态：' }}</span>
+              <el-tag :type="getCurrentStatusType()" size="small">
+                {{ getCurrentStatusText() }}
               </el-tag>
             </div>
             <div class="model-config-overview__item model-config-overview__item--wide">
-              <span class="model-config-overview__label">{{ isPaddle ? '配置端点：' : '模型目录：' }}</span>
+              <span class="model-config-overview__label">{{ currentConverterMeta?.path_label || '解析器目录：' }}</span>
               <span class="model-config-overview__value model-config-overview__value--path">
-                {{
-                  isPaddle
-                    ? (String(converterConfigData?.api_url || '').trim() || '（未配置 API URL）')
-                    : (String(converterConfigData?.download?.dest_dir || '').trim() || '（未配置，使用默认路径）')
-                }}
+                {{ getCurrentPathDisplay() }}
               </span>
             </div>
           </div>
@@ -89,61 +83,32 @@
                 <div class="item-header">
                   <label class="item-label">
                     <span class="label-icon">📦</span>
-                    模型下载保存路径
+                    {{ currentConverterMeta?.model_path_label || '解析器的模型下载保存路径' }}
                   </label>
                 </div>
-                <el-input :model-value="String(converterConfigData?.download?.dest_dir || '')"
-                  placeholder="相对项目根目录，例如 weights/…" class="path-input" clearable
-                  @update:model-value="(v) => updateConverterConfigDownloadField('dest_dir', v ?? '')" />
+                <el-input :model-value="getCurrentModelPathValue()"
+                  :placeholder="currentConverterMeta?.model_path_placeholder || '相对项目根目录，例如 weights/…'" 
+                  class="path-input" clearable
+                  @update:model-value="(v) => updateCurrentModelPath(v ?? '')" />
               </div>
-
-
             </el-card>
 
             <el-card class="config-card model-management-card" shadow="hover">
               <template #header>
                 <div class="card-header">
                   <span class="card-icon">🧩</span>
-                  <span class="card-title">模型配置</span>
+                  <span class="card-title">解析器参数配置</span>
                 </div>
               </template>
 
-              <div class="repo-config-grid">
-                <div v-if="isPaddle" class="repo-item">
-                  <label class="repo-label">
-                    <span class="label-icon">🔁</span>
-                    {{ fieldLabel('runtime_mode') }}
-                  </label>
-                  <el-select :model-value="String(converterConfigData?.runtime_mode || 'api')" size="small"
-                    style="width: 220px" @update:model-value="(v) => updateConverterConfigField('runtime_mode', v)">
-                    <el-option label="API 模式" value="api" />
-                    <el-option label="本地模式" value="local" />
-                  </el-select>
-                  <span v-if="fieldHint('runtime_mode')" class="muted" style="font-size: 12px">{{
-                    fieldHint('runtime_mode')
-                    }}</span>
-                </div>
-                <div v-for="item in configEntries" :key="item.key" class="repo-item">
-                  <template v-if="!(isPaddle && item.key === 'runtime_mode')">
-                    <label class="repo-label">
-                      <span class="label-icon">⚙️</span>
-                      {{ fieldLabel(item.key) }}
-                    </label>
-                    <el-switch v-if="typeof item.value === 'boolean'" :model-value="item.value"
-                      @update:model-value="(v) => updateConverterConfigField(item.key, v)" />
-                    <el-input-number v-else-if="typeof item.value === 'number'" :model-value="item.value" :min="0"
-                      :max="1000000" size="small"
-                      @update:model-value="(v) => updateConverterConfigField(item.key, Number(v ?? 0))" />
-                    <el-input v-else-if="typeof item.value === 'string'" :model-value="item.value"
-                      :placeholder="fieldHint(item.key)" size="small" clearable
-                      @update:model-value="(v) => updateConverterConfigField(item.key, v)" />
-                    <el-input v-else :model-value="toJsonString(item.value)" type="textarea" :rows="4"
-                      @change="(v) => updateObjectField(item.key, v)" />
-                    <span v-if="fieldHint(item.key)" class="muted" style="font-size: 12px">{{ fieldHint(item.key)
-                      }}</span>
-                  </template>
-                </div>
-              </div>
+              <!-- 使用动态表单组件 -->
+              <DynamicConfigForm 
+                v-if="configSchema && converterConfigData"
+                :schema="configSchema"
+                :model-value="converterConfigData"
+                @update:model-value="(val) => Object.assign(converterConfigData, val)"
+              />
+
               <div class="action-buttons action-buttons--config-save">
                 <el-button type="success" size="large" :loading="converterConfigSaving" @click="saveConverterConfig"
                   class="save-config-btn">
@@ -154,11 +119,12 @@
               <p class="model-actions-hint muted">修改模型参数后，请先点击“保存参数到配置文件”，再执行下载或重载。</p>
             </el-card>
 
-            <el-card v-if="isLogics" class="config-card model-management-card" shadow="hover">
+            <!-- 通用模型管理卡片（适用于所有支持动态 Schema 的解析器） -->
+            <el-card v-if="configSchema" class="config-card model-management-card" shadow="hover">
               <template #header>
                 <div class="card-header">
                   <span class="card-icon">⚙️</span>
-                  <span class="card-title">模型加载</span>
+                  <span class="card-title">模型下载与生命周期管理</span>
                 </div>
               </template>
 
@@ -174,19 +140,6 @@
                   <span>请下载模型后点击「重新加载模型」</span>
                 </template>
               </el-alert>
-
-              <div class="download-source-section">
-                <label class="section-label">
-                  <span class="label-icon">📥</span>
-                  下载源选择
-                </label>
-                <el-radio-group :model-value="dlSource" @update:model-value="$emit('update:dl-source', $event)"
-                  :disabled="modelStatus.downloading" class="source-radio-group">
-                  <el-radio-button v-for="source in availableSources" :key="source" :value="source">
-                    {{ sourceLabel(source) }}
-                  </el-radio-button>
-                </el-radio-group>
-              </div>
 
               <div class="action-buttons">
                 <el-button :loading="dlLoading || modelStatus.downloading" :disabled="modelStatus.downloading"
@@ -230,62 +183,6 @@
               </el-alert>
               <span v-if="reloadError" class="reload-error-text">{{ reloadError }}</span>
             </el-card>
-            <el-card v-else-if="isPaddle" class="config-card model-management-card" shadow="hover">
-              <template #header>
-                <div class="card-header">
-                  <span class="card-icon">⚙️</span>
-                  <span class="card-title">模型下载与配置检查</span>
-                </div>
-              </template>
-              <el-alert title="支持与其他转换器一致的下载入口；实际下载行为由当前转换器配置决定。" type="info" :closable="false"
-                class="model-status-alert" />
-              <div class="action-buttons">
-                <el-radio-group :model-value="dlSource" @update:model-value="$emit('update:dl-source', $event)"
-                  :disabled="modelStatus.downloading" class="source-radio-group">
-                  <el-radio-button v-for="source in availableSources" :key="source" :value="source">
-                    {{ sourceLabel(source) }}
-                  </el-radio-button>
-                </el-radio-group>
-              </div>
-              <div class="action-buttons">
-                <el-button :loading="dlLoading || modelStatus.downloading" :disabled="modelStatus.downloading"
-                  @click="runModelDownload" class="download-btn">
-                  <span v-if="!modelStatus.downloading">📥 按配置下载模型文件</span>
-                  <span v-else>⏳ 下载中...</span>
-                </el-button>
-                <el-button v-if="modelStatus.downloading" type="warning" @click="stopModelDownload">
-                  ⛔ 停止下载
-                </el-button>
-                <el-button type="danger" plain :disabled="modelStatus.downloading || modelStatus.model_loaded"
-                  @click="clearModelFiles">
-                  🗑️ 删除模型文件
-                </el-button>
-                <el-button @click="checkPaddleConfig" class="reload-btn">
-                  ✅ 检查 Paddle 配置
-                </el-button>
-              </div>
-              <p class="model-actions-hint muted">
-                建议流程：先保存参数配置，再执行下载；下载后可进行配置检查。
-              </p>
-              <p class="model-actions-hint muted">
-                提示：删除模型后需要重新下载，可能耗时较长；模型已加载时禁止删除。
-              </p>
-              <el-alert v-if="hasDownloadStatus" :title="downloadStatusTitle" :type="downloadStatusType"
-                :closable="false" class="model-status-alert">
-                <template #default>
-                  <div style="white-space: pre-wrap; line-height: 1.55;">
-                    {{ modelStatus.download_message || modelStatus.download_error || '暂无状态信息' }}
-                    <template
-                      v-if="modelStatus.download_source || modelStatus.download_repo || modelStatus.download_dest">
-                      <br>
-                      <span v-if="modelStatus.download_source">来源：{{ modelStatus.download_source }}</span>
-                      <span v-if="modelStatus.download_repo"><br>仓库：{{ modelStatus.download_repo }}</span>
-                      <span v-if="modelStatus.download_dest"><br>目标：{{ modelStatus.download_dest }}</span>
-                    </template>
-                  </div>
-                </template>
-              </el-alert>
-            </el-card>
           </div>
 
           <div class="settings-save-bar settings-save-bar--bottom">
@@ -299,7 +196,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import http from '@/api/http'
+import DynamicConfigForm from '@/components/DynamicConfigForm.vue'
 
 const props = defineProps({
   isAdmin: { type: Boolean, required: true },
@@ -318,7 +217,7 @@ const props = defineProps({
   clearModelFiles: { type: Function, required: true },
   reloadModel: { type: Function, required: true },
   unloadModel: { type: Function, required: true },
-  checkPaddleConfig: { type: Function, required: true },
+  checkConverterConfig: { type: Function, required: true },
   converterConfigData: { type: Object, required: true },
   converterConfigLoading: { type: Boolean, required: true },
   converterConfigSaving: { type: Boolean, required: true },
@@ -331,8 +230,124 @@ const props = defineProps({
 
 defineEmits(['update:dl-source'])
 
-const isLogics = computed(() => props.adminForm.default_converter_id === 'logics-parsing-v2')
-const isPaddle = computed(() => props.adminForm.default_converter_id === 'paddle-ocr-v3.5')
+// 动态 Schema 相关状态
+const configSchema = ref(null)
+
+// 获取配置 Schema
+const fetchConfigSchema = async () => {
+  try {
+    const engineId = props.adminForm.default_converter_id
+    // 📌 防御性检查：避免 engineId 为空时发起无效请求
+    if (!engineId || !String(engineId).trim()) {
+      console.debug('[ConfigSchema] 跳过请求：转换器 ID 为空')
+      configSchema.value = null
+      return
+    }
+    
+    // 使用封装的 http 实例，并带上 /api 前缀
+    const res = await http.get(`/api/admin/converter/${encodeURIComponent(engineId)}/config-schema`)
+    if (res.data && res.data.ok) {
+      configSchema.value = res.data.schema
+    }
+  } catch (e) {
+    console.error('Failed to fetch config schema:', e)
+    configSchema.value = null
+  }
+}
+
+// 监听解析器切换，重新加载 Schema
+watch(() => props.adminForm.default_converter_id, () => {
+  fetchConfigSchema()
+})
+
+onMounted(() => {
+  fetchConfigSchema()
+})
+
+// 获取当前选中的转换器元数据
+const currentConverterMeta = computed(() => {
+  const engineId = props.adminForm.default_converter_id
+  const converter = (props.adminForm.available_converters || []).find(c => c.id === engineId)
+  return converter?.meta || {}
+})
+
+// 动态获取状态类型
+const getCurrentStatusType = () => {
+  const meta = currentConverterMeta.value
+  if (meta.status_type === 'info') return 'info'
+  if (meta.status_type === 'success') return 'success'
+  if (meta.status_type === 'warning') return 'warning'
+  // 默认逻辑：如果有 runtime_mode 字段，显示 info，否则根据 model_loaded 判断
+  if (props.converterConfigData?.runtime_mode !== undefined) return 'info'
+  return props.modelStatus.model_loaded ? 'success' : 'warning'
+}
+
+// 动态获取状态文本
+const getCurrentStatusText = () => {
+  const meta = currentConverterMeta.value
+  // 如果转换器提供了自定义状态文本函数
+  if (meta.get_status_text && typeof meta.get_status_text === 'function') {
+    return meta.get_status_text(props.modelStatus, props.converterConfigData)
+  }
+  
+  // 默认逻辑：检查是否有 runtime_mode（某些转换器支持 API/本地模式切换）
+  if (props.converterConfigData?.runtime_mode !== undefined) {
+    const mode = String(props.converterConfigData.runtime_mode).toLowerCase()
+    return mode === 'local' ? '本地模式' : 'API 模式'
+  }
+  
+  // 标准模型加载状态
+  return props.modelStatus.model_loaded ? '已加载' : '未加载'
+}
+
+// 动态获取路径显示
+const getCurrentPathDisplay = () => {
+  const meta = currentConverterMeta.value
+  // 如果转换器提供了自定义路径获取函数
+  if (meta.get_path_display && typeof meta.get_path_display === 'function') {
+    return meta.get_path_display(props.converterConfigData)
+  }
+  
+  // 默认逻辑：优先显示 download.dest_dir，其次显示 api_url
+  const destDir = String(props.converterConfigData?.download?.dest_dir || '').trim()
+  const apiUrl = String(props.converterConfigData?.api_url || '').trim()
+  
+  if (destDir) return destDir
+  if (apiUrl) return apiUrl
+  return '（未配置，使用默认路径）'
+}
+
+// 动态获取模型路径输入框的值
+const getCurrentModelPathValue = () => {
+  const meta = currentConverterMeta.value
+  if (meta.get_model_path_value && typeof meta.get_model_path_value === 'function') {
+    return meta.get_model_path_value(props.converterConfigData)
+  }
+  return String(props.converterConfigData?.download?.dest_dir || '')
+}
+
+// 动态更新模型路径
+const updateCurrentModelPath = (value) => {
+  const meta = currentConverterMeta.value
+  if (meta.update_model_path && typeof meta.update_model_path === 'function') {
+    meta.update_model_path(value, props.converterConfigData, props.updateConverterConfigDownloadField)
+  } else {
+    // 默认更新 download.dest_dir
+    props.updateConverterConfigDownloadField('dest_dir', value)
+  }
+}
+
+// 过滤配置项时排除特定转换器的内部字段
+const shouldExcludeConfigKey = (key) => {
+  const meta = currentConverterMeta.value
+  // 如果转换器定义了需要排除的字段列表
+  if (meta.excluded_config_keys && Array.isArray(meta.excluded_config_keys)) {
+    return meta.excluded_config_keys.includes(key)
+  }
+  // 默认排除以下划线开头的字段和 download 字段
+  return key.startsWith('_') || key === 'download'
+}
+
 const availableSources = computed(() => {
   const arr = props.downloadSchema?.allowed_sources
   if (Array.isArray(arr) && arr.length) return arr
@@ -364,9 +379,8 @@ const uiMeta = computed(() => {
 const configEntries = computed(() => {
   const data = props.converterConfigData || {}
   const keys = Object.keys(data).filter((k) => {
-    if (k.startsWith('_') || k === 'download') return false
-    // 内置长命令，管理员界面不展示；仍随配置读写，本地模式由插件使用
-    if (isPaddle.value && k === 'local_command') return false
+    // 使用动态过滤函数，支持不同转换器的自定义排除规则
+    if (shouldExcludeConfigKey(k)) return false
     return true
   })
   const order = Array.isArray(uiMeta.value?.order) ? uiMeta.value.order : []

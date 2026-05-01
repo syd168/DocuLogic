@@ -10,5 +10,5 @@ frontend/dist/
 .run/
 logs/
 weights/
-# 转换器源码目录由部署方本地准备，不提交到 Git/GitHub
+# 文档解析器源码目录由部署方本地准备，不提交到 Git/GitHub
 converts/models/

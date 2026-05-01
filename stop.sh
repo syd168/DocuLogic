@@ -3,7 +3,12 @@
 # 与 stop.bat 行为一致。
 cd "$(dirname "$0")" || exit 1
 ROOT="$(pwd)"
+
 if [ -x "$ROOT/venv/bin/python" ]; then
-  exec "$ROOT/venv/bin/python" run_dev.py stop
+  PYTHON_EXEC="$ROOT/venv/bin/python"
+else
+  PYTHON_EXEC="${PYTHON:-python3}"
 fi
-exec "${PYTHON:-python3}" run_dev.py stop
+
+# 执行停止命令
+"$PYTHON_EXEC" run_dev.py stop

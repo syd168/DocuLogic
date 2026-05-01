@@ -17,6 +17,7 @@ from converts.middleware.host import (
     stop_download as plugin_stop_download,
     start_download as plugin_start_download,
 )
+from converts.middleware.registry import get_plugin
 from ..auth_security import hash_password
 from ..database import get_db
 from ..deps import get_current_admin
@@ -106,7 +107,7 @@ class AdminSettingsBody(BaseModel):
 class ModelDownloadBody(BaseModel):
     source: Literal["huggingface", "modelscope"] = "modelscope"
     repo_id: Optional[str] = Field(None, description="留空则使用配置中的默认仓库 ID")
-    engine_id: Optional[str] = Field(None, description="转换器 ID，留空使用默认转换器")
+    engine_id: Optional[str] = Field(None, description="文档解析器 ID，留空使用默认文档解析器")
     target_dir: Optional[str] = Field(None, description="目标路径（可选，留空用插件默认）")
 
 
@@ -179,12 +180,29 @@ async def admin_get_converter_download_schema(
     return {"ok": True, "engine_id": engine_id, "schema": schema.__dict__}
 
 
+@router.get("/converter/{engine_id}/config-schema")
+async def admin_get_converter_config_schema(
+    engine_id: str,
+    _: User = Depends(get_current_admin),
+):
+    """获取指定解析器的配置界面渲染 Schema。"""
+    try:
+        plugin = get_plugin(engine_id)
+        schema = plugin.get_config_schema()
+        _log.debug(f"✅ 成功获取转换器 {engine_id} 的配置 Schema")
+    except Exception as e:
+        _log.error(f"❌ 获取转换器 {engine_id} 的配置 Schema 失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=404, detail=f"获取配置 Schema 失败: {str(e)}") from e
+    return {"ok": True, "engine_id": engine_id, "schema": schema}
+
+
 @router.post("/converter/{engine_id}/download/start")
 async def admin_start_converter_download(
     engine_id: str,
     body: ConverterDownloadStartBody,
     _: User = Depends(get_current_admin),
 ):
+    """启动指定文档解析器的模型下载任务。"""
     req = ConverterDownloadRequest(
         engine_id=engine_id,
         source=str(body.source or "modelscope"),
@@ -248,34 +266,6 @@ async def admin_clear_converter_model_files(
     return {"ok": True, "engine_id": engine_id, **result}
 
 
-@router.post("/converter/paddle/check")
-async def admin_check_paddle_converter(
-    _: User = Depends(get_current_admin),
-):
-    cfg = read_converter_config("paddle-ocr-v3.5")
-    runtime_mode = str(cfg.get("runtime_mode") or "api").strip().lower()
-    if runtime_mode == "local":
-        cmd = str(cfg.get("local_command") or "").strip()
-        if not cmd:
-            raise HTTPException(status_code=400, detail="PaddleOCR 本地模式缺少 local_command 配置")
-        return {"ok": True, "message": "PaddleOCR 本地模式配置已就绪（检测到 local_command）。"}
-
-    api_url = str(cfg.get("api_url") or "").strip()
-    token = str(cfg.get("access_token") or "").strip()
-    missing = []
-    if not api_url or "your-service.example.com" in api_url:
-        missing.append("paddle_api_url")
-    if not token or token == "replace-with-token":
-        missing.append("paddle_access_token")
-
-    if missing:
-        raise HTTPException(status_code=400, detail=f"PaddleOCR 配置不完整，缺少: {', '.join(missing)}")
-    return {
-        "ok": True,
-        "message": "PaddleOCR 配置已就绪（已检测到 API URL 与 Access Token）。",
-    }
-
-
 _engine_download_task: dict[str, str] = {}
 
 
@@ -329,7 +319,7 @@ async def admin_download_model(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin),
 ):
-    """兼容旧接口：内部转发到插件化下载接口。"""
+    """兼容旧接口：内部转发到文档解析器插件化下载接口。"""
     row = get_app_settings_row(db)
     engine_id = (body.engine_id or getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2").strip()
     req = ConverterDownloadRequest(
@@ -363,6 +353,7 @@ async def admin_get_model_status(
     from .. import main as main_module
     row = get_app_settings_row(db)
     eid = (engine_id or getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2").strip()
+
     m = main_module.get_inference_model()
     task_id = _engine_download_task.get(eid, "")
     download = {
@@ -406,6 +397,7 @@ async def admin_get_model_status(
 
 @router.post("/model/reload")
 async def admin_reload_model(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ):
     """手动重新加载模型（先卸载再加载）"""
@@ -424,12 +416,15 @@ async def admin_reload_model(
     _log.info("开始重新加载模型...")
     
     try:
-        # 使用新的懒加载机制重新加载模型
-        _log.info("正在从配置加载模型...")
+        # 获取当前解析器 ID
+        row = get_app_settings_row(db)
+        engine_id = getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2"
+        _log.info(f"正在从配置加载模型 [engine_id: {engine_id}]...")
+
         main_module.reload_model_from_settings()
         
     except Exception as e:
-        _log.exception("重新加载模型失败")
+        _log.exception(f"重新加载模型失败 [engine_id: {engine_id}]")
         code = 503 if _is_cuda_oom(e) else 500
         error_msg = _friendly_model_reload_message(e)
         raise HTTPException(status_code=code, detail=f"重新加载失败：{error_msg}") from None
@@ -437,7 +432,7 @@ async def admin_reload_model(
     m = main_module.get_inference_model()
     
     if m is not None:
-        _log.info("✅ 模型重新加载成功")
+        _log.info(f"✅ 模型重新加载成功 [engine_id: {engine_id}]")
         return {
             "ok": True,
             "model_loaded": True,
@@ -454,6 +449,7 @@ async def admin_reload_model(
 
 @router.post("/model/unload")
 async def admin_unload_model(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ):
     """手动卸载模型以释放显存"""
@@ -481,12 +477,16 @@ async def admin_unload_model(
     _log.info("开始卸载模型以释放显存...")
 
     try:
+        # 获取当前解析器 ID
+        row = get_app_settings_row(db)
+        engine_id = getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2"
+        
         if not main_module.unload_model(wait_for_inference=False):
             raise HTTPException(
                 status_code=409,
                 detail="仍有解析任务在使用模型，请等待任务完成或停止后再卸载。",
             )
-        _log.info("✅ 模型已成功卸载")
+        _log.info(f"✅ 模型已成功卸载 [engine_id: {engine_id}]")
 
         return {
             "ok": True,
@@ -961,4 +961,65 @@ def get_online_users(
         "ok": True,
         "total": len(online_users),
         "users": online_users,
+    }
+
+
+@router.post("/converter/{engine_id}/check-config")
+async def admin_check_converter_config(
+    engine_id: str,
+    _: User = Depends(get_current_admin),
+):
+    """
+    通用转换器配置检查接口。
+    
+    委托给插件自身的验证逻辑，如果插件未实现则返回基本检查结果。
+    """
+    from ..converter_config_service import read_converter_config
+    
+    try:
+        cfg = read_converter_config(engine_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"读取配置失败: {str(e)}") from e
+    
+    # 尝试调用插件的自定义验证方法
+    try:
+        from converts.middleware.registry import get_plugin
+        plugin = get_plugin(engine_id)
+        
+        # 如果插件实现了 validate_config 方法，使用它
+        if hasattr(plugin, 'validate_config') and callable(plugin.validate_config):
+            result = plugin.validate_config(cfg)
+            return {"ok": True, "engine_id": engine_id, **result}
+    except Exception:
+        pass  # 插件不支持自定义验证，使用默认逻辑
+    
+    # 默认验证逻辑：检查必要字段是否存在
+    missing_fields = []
+    
+    # 检查是否有下载配置
+    download_cfg = cfg.get("download")
+    if isinstance(download_cfg, dict):
+        if not download_cfg.get("dest_dir"):
+            missing_fields.append("download.dest_dir")
+    
+    # 检查是否有 API 配置（如果转换器支持 API 模式）
+    if "api_url" in cfg or "access_token" in cfg:
+        api_url = str(cfg.get("api_url") or "").strip()
+        token = str(cfg.get("access_token") or "").strip()
+        
+        if not api_url or "your-service.example.com" in api_url:
+            missing_fields.append("api_url")
+        if not token or token == "replace-with-token":
+            missing_fields.append("access_token")
+    
+    if missing_fields:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"配置不完整，缺少: {', '.join(missing_fields)}"
+        )
+    
+    return {
+        "ok": True,
+        "engine_id": engine_id,
+        "message": "配置检查通过"
     }

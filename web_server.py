@@ -1,50 +1,69 @@
 #!/usr/bin/env python3
 """
 DocuLogic Web Server：仅启动 FastAPI（无 Vite 前端）。
-完整开发环境（后端 + 前端）请用项目根 ./start.sh 或 python3 run_dev.py start。
+完整开发环境（后端 + 前端）请用项目根 ./start.sh 或 python run_dev.py start。
 """
 
 import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()  # 加载 .env 文件（如果存在）
+
 
 # 确保web目录在Python路径中
 web_dir = Path(__file__).parent / "web"
 sys.path.insert(0, str(web_dir))
 
-# 默认模型路径优先级：
-# 1. 项目根目录下的 weights/logics-parsing-v2（当前推荐）
-# 2. 项目根目录下的 weights/logics-parsingv2（兼容旧约定）
-# 3. 项目根目录下的 weights/（兼容旧约定）
-# 4. 环境变量 MODEL_PATH（最高优先级，会覆盖以上默认值）
 _root = Path(__file__).resolve().parent
 
-# 首先尝试当前推荐目录：weights/logics-parsing-v2
-model_path_current = _root / "weights" / "logics-parsing-v2"
-if model_path_current.is_dir() and (model_path_current / "config.json").exists():
-    os.environ.setdefault("MODEL_PATH", str(model_path_current.resolve()))
-    print(f"✓ 检测到模型目录: {model_path_current.resolve()}")
-else:
-    # 兼容：旧约定放在 weights/logics-parsingv2
-    model_path_v2 = _root / "weights" / "logics-parsingv2"
-    # 兼容：旧约定直接放在 weights/
-    model_path_flat = _root / "weights"
-    if model_path_v2.is_dir() and (model_path_v2 / "config.json").exists():
-        os.environ.setdefault("MODEL_PATH", str(model_path_v2.resolve()))
-        print(f"✓ 检测到模型目录（兼容旧约定）: {model_path_v2.resolve()}")
-    elif model_path_flat.is_dir() and (model_path_flat / "config.json").exists():
-        os.environ.setdefault("MODEL_PATH", str(model_path_flat.resolve()))
-        print(f"✓ 检测到模型目录（兼容旧约定）: {model_path_flat.resolve()}")
-    else:
-        print(f"⚠ Warning: 未找到模型目录")
-        print(f"   期望位置: {model_path_current} 或 {model_path_v2} 或 {model_path_flat}")
-        print(f"   解决方案:")
-        print(f"   1. 将模型文件放到: {model_path_current}")
-        print(f"   2. 或设置环境变量: export MODEL_PATH=/path/to/model")
-        print(f"   3. 或在后台系统设置中配置模型路径")
+# 保存 PID 文件到 .run 目录
+run_dir = _root / ".run"
+run_dir.mkdir(parents=True, exist_ok=True)
+pid_file = run_dir / ".backend.pid"
+with open(pid_file, 'w') as f:
+    f.write(str(os.getpid()))
+
+# ========== 自动发现模式说明 ==========
+# 📌 新方式：采用插件自动发现机制
+# 系统启动时会自动扫描 converts/plugins/ 目录并加载所有可用文档解析器
+# 同时自动发现模型文件位置（优先级：环境变量 > 配置文件 > 约定目录）
+# 
+# 若需为特定文档解析器指定模型路径，设置环境变量：
+#   MODEL_PATH_LOGICS_PARSING_V2=/path/to/logics-model# 
+# 或在后台系统设置中配置各文档解析器的模型路径
+# ========================================
+
+print("Starting DocuLogic Platform...")
+print("✓ 使用自动发现模式加载文档解析器插件和模型")
+print()
 
 # 导入并运行 FastAPI（sys.path 已包含 web/，包名为 app）
 from app.main import app
+
+# 初始化插件注册表（自动发现模式）
+# 这会在应用启动时自动扫描 converts/plugins 目录并加载所有可用插件
+try:
+    from converts.middleware.registry import list_plugins
+    plugins_dict = list_plugins()
+    if plugins_dict:
+        print(f"✓ 已加载文档解析器插件 ({len(plugins_dict)} 个):")
+        for engine_id, class_name in sorted(plugins_dict.items()):
+            print(f"   • {engine_id:25} ({class_name})")
+    else:
+        print("⚠ Warning: 未发现任何文档解析器插件")
+except Exception as e:
+    print(f"✗ 初始化插件注册表失败: {e}")
+
+# 自动发现所有文档解析器的模型路径
+try:
+    from converts.middleware.model_discovery import discover_all_converter_models
+    model_paths = discover_all_converter_models(_root)
+    if not model_paths:
+        print("⚠ Warning: 未发现任何文档解析器的模型文件")
+        print("   如需使用文档解析功能，请先下载相应的模型文件")
+except Exception as e:
+    print(f"⚠ 自动发现模型路径时出错: {e}")
 
 if __name__ == "__main__":
     import uvicorn
@@ -53,8 +72,6 @@ if __name__ == "__main__":
         os.environ["JWT_SECRET"] = "dev-only-change-in-production"
         print("Warning: JWT_SECRET 未设置，已使用开发默认值，生产环境务必配置。")
 
-    print("Starting DocuLogic Platform...")
-    print(f"Model path: {os.environ.get('MODEL_PATH', 'Not set')}")
     port = int(os.environ.get("BACKEND_PORT", "8000"))
     fe_port = os.environ.get("FRONTEND_PORT", "5173")
     print(f"API 根路径: http://127.0.0.1:{port}/  （仅 JSON；带界面请用前端端口 {fe_port}）")

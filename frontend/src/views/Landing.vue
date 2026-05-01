@@ -27,8 +27,8 @@
         <span class="title-text" data-text="DocuLogic 文档解析平台">DocuLogic 文档解析平台</span>
       </h1>
       <p>
-        面向 <strong>PDF / 图片</strong> 的结构化解析工作台：基于 <strong>Logics-Parsing-v2</strong> 与 <strong>PaddleOCR-3.5</strong>
-        插件化引擎，将扫描件、截图与文档页转换为规范 Markdown，覆盖文本、表格、公式、流程图、化学式、乐谱、伪代码等复杂内容。
+        面向 <strong>PDF / 图片</strong> 的结构化解析工作台：基于插件化的文档解析引擎，
+        将扫描件、截图与文档页转换为规范 Markdown，覆盖文本、表格、公式、流程图、化学式、乐谱、伪代码等复杂内容。
         支持后台模型管理、实时进度、任务中断、历史记录与批量下载，适合知识库构建与企业文档自动化。
       </p>
       <div class="hero-cta">
@@ -42,8 +42,8 @@
       </div>
       <div class="hero-stats">
         <div class="hero-stat">
-          <strong>2</strong>
-          <span>内置转换器</span>
+          <strong>插件化</strong>
+          <span>动态扩展解析器</span>
         </div>
         <div class="hero-stat">
           <strong>3</strong>
@@ -62,8 +62,8 @@
       <div class="features">
         <div class="feature">
           <div class="feature-icon icon-brain">🧠</div>
-          <h3>双转换器插件化引擎</h3>
-          <p>Logics-Parsing-v2 与 PaddleOCR-3.5 可切换，下载/状态/清理统一接口</p>
+          <h3>插件化文档解析引擎</h3>
+          <p>支持多解析器动态切换，下载/状态/清理统一接口，可扩展新引擎</p>
         </div>
         <div class="feature">
           <div class="feature-icon icon-crop">✂️</div>
@@ -95,12 +95,12 @@
 
     <section class="landing-block reveal-on-scroll">
       <h2 class="landing-title">技术架构</h2>
-      <p class="landing-sub">前后端分离 + 插件化转换器 + Docker 部署，关注可扩展与稳定性。</p>
+      <p class="landing-sub">前后端分离 + 插件化文档解析器 + Docker 部署，关注可扩展与稳定性。</p>
       <div class="features">
         <div class="feature">
           <div class="feature-icon icon-rocket">🚀</div>
           <h3>FastAPI 中间件调度</h3>
-          <p>统一转换器协议，解析链路通过 host/registry 插件分发，便于新增引擎</p>
+          <p>统一文档解析器协议，解析链路通过 host/registry 插件分发，便于新增引擎</p>
         </div>
         <div class="feature">
           <div class="feature-icon icon-globe">🌐</div>
@@ -147,7 +147,7 @@
         <div class="feature">
           <div class="feature-icon icon-graduation">🎓</div>
           <h3>步骤 3：后台下载权重</h3>
-          <p>进入工作台后在「模型配置」执行下载，权重统一写入 weights/转换器目录</p>
+          <p>进入工作台后在「模型配置」执行下载，权重统一写入 weights/文档解析器目录</p>
         </div>
         <div class="feature">
           <div class="feature-icon icon-archive">🏛️</div>

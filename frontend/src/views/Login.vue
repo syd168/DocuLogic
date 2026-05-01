@@ -11,14 +11,25 @@
         <h1>登录</h1>
         <p class="lead">使用用户名、邮箱或手机号与密码登录</p>
         <el-alert v-if="err" :title="err" type="error" show-icon class="mb-3" :closable="false" />
-        <el-form @submit.prevent="submit">
+        <el-form @submit.prevent="submit" name="loginForm">
           <label class="field">
             <span>用户名 / 邮箱 / 手机号</span>
-            <el-input v-model="form.username" autocomplete="username" placeholder="用户名、邮箱或 11 位手机号" />
+            <el-input 
+              v-model="form.username" 
+              name="username"
+              autocomplete="username" 
+              placeholder="用户名、邮箱或 11 位手机号" 
+            />
           </label>
           <label class="field">
             <span>密码</span>
-            <el-input v-model="form.password" type="password" autocomplete="current-password" show-password />
+            <el-input 
+              v-model="form.password" 
+              name="password"
+              type="password" 
+              autocomplete="current-password" 
+              show-password 
+            />
           </label>
           <CaptchaBox ref="capRef" :enabled="captchaLogin" />
           <div class="form-actions">

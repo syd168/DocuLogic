@@ -65,13 +65,8 @@ export function useWorkspaceSettings({
   const downloadSchema = ref({})
   const downloadTaskId = ref('')
 
-  function normalizeConverterId(engineId) {
-    const raw = String(engineId || '').trim()
-    if (!raw) return ''
-    if (raw === 'paddleocr' || raw === 'paddle-ocr' || raw === 'paddle_ocr') return 'paddle-ocr-v3.5'
-    if (raw === 'logics' || raw === 'logics-parsing') return 'logics-parsing-v2'
-    return raw
-  }
+  // 注意：转换器 ID 的标准化由后端统一处理（converts/middleware/registry.normalize_engine_id）
+  // 前端直接使用后端返回的标准化 ID，不再进行额外的别名映射
 
   const adminForm = reactive({
     registration_enabled: true,
@@ -80,7 +75,7 @@ export function useWorkspaceSettings({
     captcha_forgot_enabled: false,
     pdf_max_pages: 80,
     output_dir: '',
-    default_converter_id: 'logics-parsing-v2',
+    default_converter_id: '', // 将在加载配置后动态设置
     available_converters: [],
     email_mock: true,
     smtp_host: '',
@@ -157,14 +152,21 @@ export function useWorkspaceSettings({
     adminForm.captcha_forgot_enabled = !!a.captcha_forgot_enabled
     adminForm.pdf_max_pages = a.pdf_max_pages || 80
     adminForm.output_dir = a.output_dir ?? ''
-    adminForm.default_converter_id = normalizeConverterId(a.default_converter_id) || 'logics-parsing-v2'
+    
+    // 动态设置转换器列表，不再使用硬编码 fallback
     const converters = Array.isArray(a.available_converters) ? a.available_converters : []
-    adminForm.available_converters = converters.length
-      ? converters
-      : [{ id: 'logics-parsing-v2', name: 'Logics-Parsing-v2', enabled: true }]
-    if (!adminForm.available_converters.some((x) => x.id === adminForm.default_converter_id)) {
-      adminForm.default_converter_id = adminForm.available_converters[0]?.id || 'logics-parsing-v2'
+    adminForm.available_converters = converters
+    
+    // 设置默认转换器 ID：优先使用后端返回的值，否则使用第一个可用的转换器
+    const backendId = String(a.default_converter_id || '').trim()
+    if (backendId && converters.some(c => c.id === backendId)) {
+      adminForm.default_converter_id = backendId
+    } else if (converters.length > 0) {
+      adminForm.default_converter_id = converters[0].id
+    } else {
+      adminForm.default_converter_id = '' // 无可用转换器时保持空值
     }
+    
     adminForm.email_mock = a.email_mock !== false
     adminForm.smtp_host = a.smtp_host ?? ''
     adminForm.smtp_port = a.smtp_port ?? 587
@@ -257,18 +259,12 @@ export function useWorkspaceSettings({
   }
 
   async function loadConverterConfig(engineId = adminForm.default_converter_id) {
-    const id = normalizeConverterId(engineId)
+    const id = engineId
     if (!id) return
     converterConfigLoading.value = true
     try {
       const { data } = await http.get(`/api/admin/converter/config-data/${encodeURIComponent(id)}`)
       converterConfigData.value = data?.data && typeof data.data === 'object' ? data.data : {}
-      if (id === 'paddle-ocr-v3.5' && !converterConfigData.value.runtime_mode) {
-        converterConfigData.value = {
-          ...converterConfigData.value,
-          runtime_mode: 'api',
-        }
-      }
     } catch (e) {
       const status = e?.response?.status
       if (status === 404) {
@@ -276,18 +272,18 @@ export function useWorkspaceSettings({
         converterConfigData.value = {}
         if (!converterConfigApiWarned.value) {
           converterConfigApiWarned.value = true
-          ElMessage.warning('转换器配置接口未就绪，请重启后端后重试')
+          ElMessage.warning('文档解析器配置接口未就绪，请重启后端后重试')
         }
         return
       }
-      ElMessage.error(e.response?.data?.detail || e.message || '加载转换器配置失败')
+      ElMessage.error(e.response?.data?.detail || e.message || '加载文档解析器配置失败')
     } finally {
       converterConfigLoading.value = false
     }
   }
 
   async function loadDownloadSchema(engineId = adminForm.default_converter_id) {
-    const id = normalizeConverterId(engineId)
+    const id = engineId
     if (!id) return
     try {
       const { data } = await http.get(`/api/admin/converter/${encodeURIComponent(id)}/download/schema`)
@@ -306,16 +302,16 @@ export function useWorkspaceSettings({
   }
 
   async function saveConverterConfig() {
-    const id = normalizeConverterId(adminForm.default_converter_id)
+    const id = adminForm.default_converter_id
     if (!id) return
     converterConfigSaving.value = true
     try {
       await http.put(`/api/admin/converter/config-data/${encodeURIComponent(id)}`, {
         data: converterConfigData.value ?? {},
       })
-      ElMessage.success('转换器配置已保存')
+      ElMessage.success('文档解析器配置已保存')
     } catch (e) {
-      ElMessage.error(e.response?.data?.detail || e.message || '保存转换器配置失败')
+      ElMessage.error(e.response?.data?.detail || e.message || '保存文档解析器配置失败')
     } finally {
       converterConfigSaving.value = false
     }
@@ -370,7 +366,7 @@ export function useWorkspaceSettings({
     }
     dlLoading.value = true
     try {
-      const engineId = normalizeConverterId(adminForm.default_converter_id)
+      const engineId = adminForm.default_converter_id
       const { data } = await http.post(`/api/admin/converter/${encodeURIComponent(engineId)}/download/start`, {
         source: dlSource.value,
       })
@@ -385,7 +381,7 @@ export function useWorkspaceSettings({
   }
 
   async function stopModelDownload() {
-    const engineId = normalizeConverterId(adminForm.default_converter_id)
+    const engineId = adminForm.default_converter_id
     const taskId = modelStatus.value.download_task_id || downloadTaskId.value
     if (!taskId) {
       ElMessage.warning('未找到可停止的下载任务')
@@ -401,10 +397,10 @@ export function useWorkspaceSettings({
   }
 
   async function clearModelFiles() {
-    const engineId = normalizeConverterId(adminForm.default_converter_id)
+    const engineId = adminForm.default_converter_id
     try {
       await ElMessageBox.confirm(
-        '确定删除当前转换器模型文件夹吗？删除后如需使用需重新下载，可能耗时较长。',
+        '确定删除当前文档解析器模型文件夹吗？删除后如需使用需重新下载，可能耗时较长。',
         '确认删除模型文件',
         { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
       )
@@ -464,7 +460,7 @@ export function useWorkspaceSettings({
 
   async function checkModelStatus() {
     try {
-      const engineId = normalizeConverterId(adminForm.default_converter_id)
+      const engineId = adminForm.default_converter_id
       const { data } = await http.get('/api/admin/model/status', {
         params: { engine_id: engineId },
       })
@@ -559,12 +555,20 @@ export function useWorkspaceSettings({
     }
   }
 
-  async function checkPaddleConfig() {
+  async function checkConverterConfig() {
     try {
-      const { data } = await http.post('/api/admin/converter/paddle/check')
-      ElMessage.success(data?.message || 'PaddleOCR 配置检查通过')
+      const engineId = adminForm.default_converter_id
+      if (!engineId) {
+        ElMessage.warning('请先选择解析器')
+        return
+      }
+      
+      const { data } = await http.post(`/api/admin/converter/${engineId}/check-config`)
+      const converterName = (adminForm.available_converters || []).find(c => c.id === engineId)?.name || engineId
+      ElMessage.success(data?.message || `${converterName} 配置检查通过`)
     } catch (e) {
-      ElMessage.error(e.response?.data?.detail || e.message || 'PaddleOCR 配置检查失败')
+      const detail = e.response?.data?.detail || e.message || '配置检查失败'
+      ElMessage.error(detail)
     }
   }
 
@@ -583,6 +587,7 @@ export function useWorkspaceSettings({
   }
 
   return {
+    // State
     settingsLoadError,
     settingsSummary,
     effectivePaths,
@@ -606,6 +611,8 @@ export function useWorkspaceSettings({
     downloadSchema,
     dirPickerSupported,
     uploadSizeValidation,
+    
+    // Actions
     pickOutputDir,
     pasteOutputPathFromClipboard,
     loadSettings,
@@ -623,7 +630,7 @@ export function useWorkspaceSettings({
     checkModelStatus,
     reloadModel,
     unloadModel,
-    checkPaddleConfig,
+    checkConverterConfig,
     disposeAdminSettings,
   }
 }

@@ -258,6 +258,13 @@ export function useWorkspaceSettings({
     }
   }
 
+  function syncDownloadSourceFromConfig() {
+    const fromConfig = String(converterConfigData.value?.download?.default_source || '').trim()
+    if (fromConfig) {
+      dlSource.value = fromConfig
+    }
+  }
+
   async function loadConverterConfig(engineId = adminForm.default_converter_id) {
     const id = engineId
     if (!id) return
@@ -265,6 +272,7 @@ export function useWorkspaceSettings({
     try {
       const { data } = await http.get(`/api/admin/converter/config-data/${encodeURIComponent(id)}`)
       converterConfigData.value = data?.data && typeof data.data === 'object' ? data.data : {}
+      syncDownloadSourceFromConfig()
     } catch (e) {
       const status = e?.response?.status
       if (status === 404) {
@@ -290,7 +298,10 @@ export function useWorkspaceSettings({
       const schema = data?.schema && typeof data.schema === 'object' ? data.schema : {}
       downloadSchema.value = schema
       const allowed = Array.isArray(schema.allowed_sources) ? schema.allowed_sources : []
-      if (schema.default_source && String(schema.default_source).trim()) {
+      const configSource = String(converterConfigData.value?.download?.default_source || '').trim()
+      if (configSource) {
+        dlSource.value = configSource
+      } else if (schema.default_source && String(schema.default_source).trim()) {
         dlSource.value = String(schema.default_source).trim()
       } else if (allowed.length && !allowed.includes(dlSource.value)) {
         dlSource.value = String(allowed[0])
@@ -307,8 +318,9 @@ export function useWorkspaceSettings({
     converterConfigSaving.value = true
     try {
       await http.put(`/api/admin/converter/config-data/${encodeURIComponent(id)}`, {
-        data: converterConfigData.value ?? {},
+        data: { ...(converterConfigData.value ?? {}) },
       })
+      await loadConverterConfig(id)
       ElMessage.success('文档解析器配置已保存')
     } catch (e) {
       ElMessage.error(e.response?.data?.detail || e.message || '保存文档解析器配置失败')
@@ -367,8 +379,9 @@ export function useWorkspaceSettings({
     dlLoading.value = true
     try {
       const engineId = adminForm.default_converter_id
+      const source = String(converterConfigData.value?.download?.default_source || dlSource.value || 'modelscope').trim()
       const { data } = await http.post(`/api/admin/converter/${encodeURIComponent(engineId)}/download/start`, {
-        source: dlSource.value,
+        source,
       })
       downloadTaskId.value = data?.task_id || ''
       ElMessage({ message: '✅ 下载任务已启动，请在下方查看实时日志', type: 'success', duration: 3000 })

@@ -77,6 +77,14 @@ def _read_download_config_from_jsonc(engine_id: str) -> dict:
         return {}
 
 
+def _get_progress_interval_seconds() -> float:
+    raw = str(os.environ.get("DOWNLOAD_PROGRESS_INTERVAL", "5")).strip()
+    try:
+        return max(2.0, float(raw))
+    except Exception:
+        return 5.0
+
+
 def _get_stall_timeout_seconds() -> int:
     """下载长时间无进度判定阈值（秒）。"""
     raw = str(os.environ.get("DOWNLOAD_STALL_TIMEOUT_SECONDS", "180")).strip()
@@ -84,6 +92,13 @@ def _get_stall_timeout_seconds() -> int:
         return max(30, int(raw))
     except Exception:
         return 180
+
+
+def _strip_download_proxies(env: dict[str, str]) -> None:
+    """下载子进程直连源站，避免 Daemon/BuildKit 注入的代理在容器内不可达或极慢。"""
+    for key in list(env.keys()):
+        if key.lower() in ("http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+            env.pop(key, None)
 
 
 class PluginDownloadRunner:
@@ -157,7 +172,8 @@ class PluginDownloadRunner:
         dcfg = _read_download_config_from_jsonc(self.engine_id)
         cfg_mode = str(dcfg.get("mode") or "snapshot").strip().lower()
         cfg_sources = dcfg.get("repos") if isinstance(dcfg.get("repos"), dict) else {}
-        source = (request.source or self.default_source).strip()
+        cfg_default_source = str(dcfg.get("default_source") or "").strip()
+        source = (request.source or cfg_default_source or self.default_source).strip()
         if source not in self.allowed_sources:
             raise RuntimeError(f"不支持的下载源: {source}")
         repo = (
@@ -292,10 +308,16 @@ class PluginDownloadRunner:
             try:
                 self._run_snapshot_download(task_id, source, repo, dest)
             except Exception as first_err:
-                fallback = self.fallback_source.get(source)
+                dcfg = _read_download_config_from_jsonc(self.engine_id)
+                cfg_sources = dcfg.get("repos") if isinstance(dcfg.get("repos"), dict) else {}
+                cfg_fallback = dcfg.get("fallback_source") if isinstance(dcfg.get("fallback_source"), dict) else {}
+                fallback = str(cfg_fallback.get(source) or self.fallback_source.get(source) or "").strip()
                 if not fallback:
                     raise
-                fallback_repo = (self.repos.get(fallback) or "").strip()
+                fallback_repo = (
+                    str(cfg_sources.get(fallback) or "").strip()
+                    or (self.repos.get(fallback) or "").strip()
+                )
                 if not fallback_repo:
                     raise
                 _log.warning(
@@ -367,21 +389,44 @@ class PluginDownloadRunner:
                 if task:
                     task["proc"] = None
 
-    def _run_snapshot_download(self, task_id: str, source: str, repo: str, dest: Path) -> None:
-        code = (
-            "import sys\n"
+    def _snapshot_download_script(self) -> str:
+        """子进程内执行的下载脚本（独立进程避免阻塞主服务）。"""
+        return (
+            "import os, sys\n"
             "from pathlib import Path\n"
             "source, repo, dest = sys.argv[1], sys.argv[2], sys.argv[3]\n"
             "Path(dest).mkdir(parents=True, exist_ok=True)\n"
+            "workers = max(1, min(8, int(os.environ.get('MODEL_DOWNLOAD_WORKERS', '4'))))\n"
             "if source == 'huggingface':\n"
             "    from huggingface_hub import snapshot_download\n"
-            "    snapshot_download(repo_id=repo, local_dir=dest, local_dir_use_symlinks=False, resume_download=True)\n"
+            "    snapshot_download(\n"
+            "        repo_id=repo,\n"
+            "        local_dir=dest,\n"
+            "        resume_download=True,\n"
+            "        max_workers=workers,\n"
+            "    )\n"
             "elif source == 'modelscope':\n"
             "    from modelscope import snapshot_download\n"
-            "    snapshot_download(repo_id=repo, local_dir=dest)\n"
+            "    # ModelScope 使用 model_id；重复执行同一命令可断点续传\n"
+            "    snapshot_download(model_id=repo, local_dir=dest)\n"
             "else:\n"
             "    raise RuntimeError(f'unsupported source: {source}')\n"
         )
+
+    def _download_env_overrides(self) -> dict[str, str]:
+        overrides: dict[str, str] = {}
+        for key in ("HF_HUB_DOWNLOAD_TIMEOUT", "MODEL_DOWNLOAD_WORKERS"):
+            val = os.environ.get(key, "").strip()
+            if val:
+                overrides[key] = val
+        if os.environ.get("HF_HUB_ENABLE_HF_TRANSFER", "").strip():
+            overrides["HF_HUB_ENABLE_HF_TRANSFER"] = os.environ["HF_HUB_ENABLE_HF_TRANSFER"].strip()
+        return overrides
+
+    def _run_snapshot_download(self, task_id: str, source: str, repo: str, dest: Path) -> None:
+        code = self._snapshot_download_script()
+        base_env = self._download_env_overrides()
+        cmd = [sys.executable, "-c", code, source, repo, str(dest)]
         if source == "huggingface":
             # 先走默认端点；失败后自动尝试镜像端点，提升国内网络可用性。
             endpoints = [os.environ.get("HF_ENDPOINT", "").strip(), "https://hf-mirror.com"]
@@ -392,13 +437,13 @@ class PluginDownloadRunner:
                 if ep in attempted:
                     continue
                 attempted.add(ep)
-                env_overrides = {}
+                env_overrides = dict(base_env)
                 if ep:
                     env_overrides["HF_ENDPOINT"] = ep
                 try:
                     self._run_external_command(
                         task_id,
-                        [sys.executable, "-c", code, source, repo, str(dest)],
+                        cmd,
                         env_overrides=env_overrides,
                     )
                     if ep:
@@ -414,10 +459,11 @@ class PluginDownloadRunner:
                     continue
             raise RuntimeError(f"HuggingFace 下载失败（已尝试默认端点和镜像）: {last_error}")
 
-        self._run_external_command(task_id, [sys.executable, "-c", code, source, repo, str(dest)])
+        self._run_external_command(task_id, cmd, env_overrides=base_env or None)
 
     def _run_external_command(self, task_id: str, cmd: list[str], env_overrides: dict | None = None) -> None:
         env = os.environ.copy()
+        _strip_download_proxies(env)
         if env_overrides:
             env.update({str(k): str(v) for k, v in env_overrides.items()})
         proc = subprocess.Popen(
@@ -463,6 +509,7 @@ class PluginDownloadRunner:
             dest_path = Path(cur.dest) if cur and cur.dest else None
         start_ts = time.time()
         stall_timeout = _get_stall_timeout_seconds()
+        progress_interval = _get_progress_interval_seconds()
         last_report = 0.0
         last_log_heartbeat = 0.0
         last_size = _dir_size_bytes(dest_path) if dest_path else 0
@@ -477,7 +524,7 @@ class PluginDownloadRunner:
                     proc.kill()
                 raise RuntimeError("用户停止下载")
             now = time.time()
-            if now - last_report >= 2.0:
+            if now - last_report >= progress_interval:
                 current_size = _dir_size_bytes(dest_path) if dest_path else 0
                 if current_size > last_size:
                     stagnant_since = now
@@ -502,14 +549,22 @@ class PluginDownloadRunner:
                         stagnant_sec,
                     )
                     last_log_heartbeat = now
+                delta_mb = max(0.0, (current_size - last_size) / (1024 * 1024))
+                write_mbps = delta_mb / progress_interval if progress_interval > 0 else 0.0
+                speed_hint = (
+                    f"，写入速度约 {write_mbps:.2f} MB/s（按磁盘增长估算，非网卡实时速率）"
+                    if delta_mb > 0.01
+                    else ""
+                )
                 self._set_status(
                     task_id,
                     lambda cur: ConverterDownloadStatus(
                         **{
                             **cur.__dict__,
                             "message": (
-                                f"下载中（已用时 {elapsed_sec}s，已下载约 {current_size / (1024 * 1024):.2f} MB）"
-                                + ("，当前网络响应较慢，请耐心等待" if stagnant_sec >= 20 else "")
+                                f"下载中（已用时 {elapsed_sec}s，已写入磁盘约 {current_size / (1024 * 1024):.2f} MB"
+                                f"{speed_hint}）"
+                                + ("，当前写入停滞较久，请耐心等待" if stagnant_sec >= 20 else "")
                             ),
                         }
                     ),

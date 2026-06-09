@@ -3,17 +3,19 @@ FROM python:3.10-slim AS builder
 
 WORKDIR /build
 
-# 安装 Node.js 用于构建前端
-RUN apt-get update && apt-get install -y \
+# 安装 Node.js 用于构建前端（构建阶段不走 HTTP 代理，避免 buildkit 注入的代理在容器内不可达）
+RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+    bash -c 'apt-get update && apt-get install -y \
     curl \
     gnupg \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*'
 
 # 复制并安装前端依赖
 COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm install
+RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+    bash -c 'cd frontend && npm install'
 
 # 复制前端源码并构建
 COPY frontend/ ./frontend/
@@ -22,8 +24,9 @@ RUN cd frontend && npm run build
 # 最终镜像
 FROM python:3.10-slim
 
-# 安装系统依赖和 Nginx
-RUN apt-get update && apt-get install -y \
+# 安装系统依赖和 Nginx（国内镜像/apt 源直连，不走 buildkit 注入的 HTTP 代理）
+RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+    bash -c 'apt-get update && apt-get install -y \
     nginx \
     cron \
     sqlite3 \
@@ -34,16 +37,23 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender1 \
     libxcb1 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*'
 
 WORKDIR /app
 
 # 复制 Python 依赖并安装
 COPY requirements.txt .
 
-#RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-#使用华为源
-RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.huaweicloud.com/repository/pypi/simple
+# 使用华为源；构建时清除代理，避免 pip 经不可达的 buildkit 代理访问国内镜像
+# PyTorch 包体积大（~900MB），单独安装并放宽超时/重试，避免 Read timed out
+ARG PIP_INDEX=https://mirrors.huaweicloud.com/repository/pypi/simple
+RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+    pip install --no-cache-dir --default-timeout=1000 --retries 10 \
+    torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 \
+    -i ${PIP_INDEX}
+RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+    pip install --no-cache-dir --default-timeout=300 --retries 5 \
+    -r requirements.txt -i ${PIP_INDEX}
 
 # 复制后端代码
 COPY web/ ./web/
@@ -52,6 +62,7 @@ COPY web_server.py .
 COPY converts/middleware/ ./converts/middleware/
 COPY converts/plugins/ ./converts/plugins/
 COPY converts/configs/ ./converts/configs/
+COPY converts/configs/ ./converts/configs.defaults/
 # 复制本地预置文档解析器源码目录（由部署方提前下载，不纳入 Git）
 COPY converts/models/ ./converts/models/
 

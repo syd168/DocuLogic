@@ -31,9 +31,13 @@ class LogicsParsingV2Plugin:
         "download": {
             "mode": "snapshot",
             "dest_dir": "weights/logics-parsing-v2",
+            "default_source": "modelscope",
             "repos": {
                 "huggingface": "Logics-MLLM/Logics-Parsing-v2",
                 "modelscope": "Alibaba-DT/Logics-Parsing-v2"
+            },
+            "fallback_source": {
+                "modelscope": "huggingface"
             }
         }
     }
@@ -46,7 +50,9 @@ class LogicsParsingV2Plugin:
             "modelscope": "Alibaba-DT/Logics-Parsing-v2",
         },
         target_dir="weights/logics-parsing-v2",  # 仅作为默认值，实际会被自动推导覆盖
-        notes=f"模型将自动下载到 weights/logics-parsing-v2",
+        notes="模型将自动下载到 weights/logics-parsing-v2",
+        # ModelScope 不可达时自动回退到 HuggingFace（含镜像端点重试）
+        fallback_source={"modelscope": "huggingface"},
     )
 
     def run(self, job_input: ConversionJobInput) -> ConversionJobResult:

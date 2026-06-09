@@ -9,6 +9,10 @@
     "repos": {
       "huggingface": "Logics-MLLM/Logics-Parsing-v2",
       "modelscope": "Alibaba-DT/Logics-Parsing-v2"
+    },
+    "default_source": "modelscope",
+    "fallback_source": {
+      "modelscope": "huggingface"
     }
   },
   "_meta": {

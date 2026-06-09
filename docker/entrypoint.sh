@@ -20,7 +20,13 @@ echo ""
 
 # 检查必要的目录和权限
 echo "📁 检查目录结构和权限..."
-mkdir -p /app/logs /app/out /app/web/data /app/backups
+mkdir -p /app/logs /app/out /app/web/data /app/backups /app/converts/configs
+
+# 首次挂载空配置卷时，从镜像内置默认配置初始化
+if [ -d /app/converts/configs.defaults ] && [ -z "$(ls -A /app/converts/configs 2>/dev/null)" ]; then
+    echo "ℹ️  初始化解析器默认配置到持久化卷..."
+    cp -a /app/converts/configs.defaults/. /app/converts/configs/
+fi
 
 # 检查关键挂载点是否可写
 WRITABLE=true

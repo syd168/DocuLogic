@@ -109,7 +109,7 @@ fi
 
 # 检查子目录，如果不存在则提示（由 Docker 自动创建）
 MISSING_DIRS=()
-for dir in "${DATA_DIR}/output" "${DATA_DIR}/logs" "${DATA_DIR}/database/sqlite" "${DATA_DIR}/backups" "${MODEL_DIR}"; do
+for dir in "${DATA_DIR}/output" "${DATA_DIR}/logs" "${DATA_DIR}/database/sqlite" "${DATA_DIR}/backups" "${DATA_DIR}/converter-configs" "${MODEL_DIR}"; do
     if [ ! -d "$dir" ]; then
         MISSING_DIRS+=("$dir")
     fi

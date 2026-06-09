@@ -1,4 +1,4 @@
-# DocuLogic v1.0.0
+# DocuLogic v1.1.0
 
 <div align="center">
 

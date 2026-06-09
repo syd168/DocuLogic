@@ -134,6 +134,12 @@ def write_converter_config_data(engine_id: str, data: dict) -> Path:
     if not isinstance(data, dict):
         raise ValueError("文档解析器配置必须是对象")
     path = ensure_converter_config(engine_id)
-    text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    existing: dict = {}
+    try:
+        existing = parse_jsonc(path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    merged = _deep_merge(existing, data)
+    text = json.dumps(merged, ensure_ascii=False, indent=2) + "\n"
     path.write_text(text, encoding="utf-8")
     return path

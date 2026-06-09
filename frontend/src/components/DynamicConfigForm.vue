@@ -84,13 +84,13 @@
                 <!-- 如果子字段是 JSON 类型（如 repos），渲染为单选按钮组 -->
                 <div v-if="child.type === 'json' && typeof formData[field.key]?.[child.key] === 'object'" style="flex: 1; display: flex; align-items: center; gap: 12px;">
                   <span class="nested-label">{{ child.label }}:</span>
-                  <el-radio-group v-model="selectedRepoSource[field.key + '.' + child.key]" class="repo-group">
+                  <el-radio-group v-model="formData[field.key].default_source" class="repo-group">
                     <el-radio-button v-for="(repoUrl, sourceName) in formData[field.key][child.key]" :key="sourceName" :value="sourceName">
                       {{ formatSourceName(sourceName) }}
                     </el-radio-button>
                   </el-radio-group>
                   <div class="muted" style="font-size: 12px; color: #909399; white-space: nowrap; margin-left: auto;">
-                    当前地址: {{ formData[field.key][child.key][selectedRepoSource[field.key + '.' + child.key]] }}
+                    当前地址: {{ formData[field.key][child.key][formData[field.key].default_source] }}
                   </div>
                 </div>
                 
@@ -126,7 +126,6 @@ const emit = defineEmits(['update:modelValue'])
 
 const formData = ref({}) // 初始化为空对象
 const jsonFields = ref({})
-const selectedRepoSource = ref({}) // 用于存储用户选择的下载源（如 'modelscope'）
 
 // 获取字段对应的图标
 const getFieldIcon = (key) => {
@@ -149,10 +148,17 @@ const formatSourceName = (name) => {
   return map[name] || name
 }
 
-// 处理仓库源切换
-const handleRepoChange = (parentKey, childKey, sourceName) => {
-  // 这里只是记录用户的选择，实际下载时后端会根据这个 sourceName 去 repos 里找对应的 URL
-  console.log(`User selected source: ${sourceName} for ${parentKey}.${childKey}`)
+// 确保 download.default_source 与 repos 中的键一致（持久化到配置文件）
+const ensureDownloadDefaultSource = (downloadObj) => {
+  if (!downloadObj || typeof downloadObj !== 'object') return
+  const repos = downloadObj.repos
+  if (!repos || typeof repos !== 'object') return
+  const keys = Object.keys(repos)
+  if (!keys.length) return
+  const current = String(downloadObj.default_source || '').trim()
+  if (!current || !keys.includes(current)) {
+    downloadObj.default_source = keys.includes('modelscope') ? 'modelscope' : keys[0]
+  }
 }
 
 // 监听 modelValue 变化，同步到 formData
@@ -176,12 +182,7 @@ watch(() => props.modelValue, (newVal) => {
             const val = formData.value[field.key]?.[child.key]
             if (typeof val === 'object') {
               jsonFields.value[fullKey] = JSON.stringify(val, null, 2)
-              
-              // 自动选中第一个下载源作为默认值
-              const keys = Object.keys(val)
-              if (keys.length > 0 && !selectedRepoSource.value[fullKey]) {
-                selectedRepoSource.value[fullKey] = keys[0]
-              }
+              ensureDownloadDefaultSource(formData.value[field.key])
             }
           }
         })
@@ -215,9 +216,9 @@ const handleJsonBlur = (key) => {
   }
 }
 
-// 监听数据变化并同步给父组件
+// 监听数据变化并同步给父组件（浅拷贝，避免与父级共享同一引用导致状态错乱）
 watch(formData, (newVal) => {
-  emit('update:modelValue', newVal)
+  emit('update:modelValue', { ...newVal })
 }, { deep: true })
 </script>
 

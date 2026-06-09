@@ -20,6 +20,8 @@ services:
       - ${DATA_DIR:-~/doculogic/data}/logs:/app/logs                   # 应用日志
       - ${DATA_DIR:-~/doculogic/data}/database/sqlite:/app/web/data   # SQLite 数据库（DATABASE_TYPE=sqlite 时）
       - ${DATA_DIR:-~/doculogic/data}/backups:/app/backups             # 数据库备份目录
+      # 解析器参数配置（保存后持久化，避免容器重建丢失）
+      - ${DATA_DIR:-~/doculogic/data}/converter-configs:/app/converts/configs
       # 宿主机模型目录映射到容器（当前统一使用 weights 路径）
       - ${MODEL_DIR:-~/doculogic/weights}:/app/weights
     
@@ -39,6 +41,13 @@ services:
       - PDF_MAX_PAGES=${PDF_MAX_PAGES:-80}
       # 允许无模型启动
       - ALLOW_START_WITHOUT_MODEL=${ALLOW_START_WITHOUT_MODEL:-1}
+      # HuggingFace 镜像（ModelScope 失败回退下载时使用）
+      - HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+      # 模型下载调优（.env 中配置后需在此声明才会传入容器）
+      - MODEL_DOWNLOAD_WORKERS=${MODEL_DOWNLOAD_WORKERS:-4}
+      - HF_HUB_DOWNLOAD_TIMEOUT=${HF_HUB_DOWNLOAD_TIMEOUT:-600}
+      - DOWNLOAD_PROGRESS_INTERVAL=${DOWNLOAD_PROGRESS_INTERVAL:-5}
+      - DOWNLOAD_STALL_TIMEOUT_SECONDS=${DOWNLOAD_STALL_TIMEOUT_SECONDS:-180}
       # 调试模式
       - DEBUG_MODE=${DEBUG_MODE:-0}
       # 邮件模拟模式

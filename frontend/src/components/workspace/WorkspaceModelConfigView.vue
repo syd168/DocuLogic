@@ -106,7 +106,7 @@
                 v-if="configSchema && converterConfigData"
                 :schema="configSchema"
                 :model-value="converterConfigData"
-                @update:model-value="(val) => Object.assign(converterConfigData, val)"
+                @update:model-value="onConverterConfigFormUpdate"
               />
 
               <div class="action-buttons action-buttons--config-save">
@@ -228,7 +228,11 @@ const props = defineProps({
   updateConverterConfigDownloadField: { type: Function, required: true },
 })
 
-defineEmits(['update:dl-source'])
+const emit = defineEmits(['update:dl-source', 'update:converterConfigData'])
+
+function onConverterConfigFormUpdate(val) {
+  emit('update:converterConfigData', { ...(props.converterConfigData || {}), ...(val || {}) })
+}
 
 // 动态 Schema 相关状态
 const configSchema = ref(null)

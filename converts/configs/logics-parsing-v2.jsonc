@@ -41,5 +41,8 @@
   "formula_detection_model": "yolo_v8_mfd",
   "formula_recognition_model": "unimernet_small",
   "layout_model": "layoutlmv3",
-  "enable_plugins": false
+  "enable_plugins": false,
+  "force_ocr": false,
+  "use_llm": false,
+  "disable_image_extraction": false
 }

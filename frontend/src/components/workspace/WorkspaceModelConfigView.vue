@@ -42,6 +42,7 @@
                 <el-option v-for="item in (adminForm.available_converters || [])" :key="item.id"
                   :label="item.name || item.id" :value="item.id" />
               </el-select>
+              <span class="muted" style="font-size: 12px; margin-left: 8px;">切换后请点「保存到数据库」，系统会自动卸载其它引擎</span>
             </div>
             <div class="model-config-overview__item">
               <span class="model-config-overview__label">{{ currentConverterMeta?.status_label || '解析器状态：' }}</span>

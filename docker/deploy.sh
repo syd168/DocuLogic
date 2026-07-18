@@ -10,6 +10,7 @@ echo ""
 # 解析命令行参数
 FORCE_COPY=false
 SKIP_MIGRATION=false
+WITH_MARKER=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -23,13 +24,26 @@ while [[ $# -gt 0 ]]; do
             echo "⏭️  跳过数据迁移"
             shift
             ;;
+        --with-marker)
+            WITH_MARKER=true
+            echo "📦 构建时安装可选引擎 Marker（GPL-3.0，见 LICENSE-THIRD-PARTY.md）"
+            shift
+            ;;
         -h|--help)
             echo "用法: ./docker/deploy.sh [选项]"
             echo ""
             echo "选项:"
             echo "  -f, --force-copy     强制覆盖目标数据库文件（即使已存在）"
             echo "  --skip-migration     跳过自动数据迁移"
+            echo "  --with-marker        构建镜像时安装 Marker（GPL；默认不装）"
             echo "  -h, --help           显示此帮助信息"
+            echo ""
+            echo "环境变量（也可写在项目根目录 .env）:"
+            echo "  INSTALL_MARKER=1     同 --with-marker"
+            echo "  PIP_INDEX=...        构建时 pip 索引（默认华为云 PyPI）"
+            echo ""
+            echo "部署后单独安装 Marker（不重建镜像）:"
+            echo "  ./docker/install-marker.sh"
             exit 0
             ;;
         *)
@@ -47,17 +61,33 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # 切换到项目根目录
 cd "${PROJECT_ROOT}"
 
-# 📌 优先从 .env 文件加载配置，再设置默认值
+# 展开路径中的 ~（避免 compose 卷挂载解析失败）
+_expand_path() {
+    local p="$1"
+    if [[ "$p" == "~" ]]; then
+        echo "${HOME}"
+    elif [[ "$p" == ~/* ]]; then
+        echo "${HOME}/${p#~/}"
+    else
+        echo "$p"
+    fi
+}
+
+# 📌 优先从项目根 .env 加载配置，再设置默认值（compose 会经 docker/.env 同步读取）
 if [ -f .env ]; then
     # 从 .env 提取关键配置
     ENV_DATA_DIR=$(grep -E '^DATA_DIR=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
     ENV_MODEL_DIR=$(grep -E '^MODEL_DIR=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
     ENV_HOST_PORT=$(grep -E '^HOST_PORT=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
+    ENV_INSTALL_MARKER=$(grep -E '^INSTALL_MARKER=' .env | cut -d'=' -f2 | sed 's/#.*//' | tr -d '[:space:]' | tr -d '"' | tr -d "'")
     
     # 如果 .env 中有定义，则使用；否则使用默认值
-    DATA_DIR="${ENV_DATA_DIR:-${HOME}/doculogic/data}"
-    MODEL_DIR="${ENV_MODEL_DIR:-${HOME}/doculogic/weights}"
+    DATA_DIR="$(_expand_path "${ENV_DATA_DIR:-${HOME}/doculogic/data}")"
+    MODEL_DIR="$(_expand_path "${ENV_MODEL_DIR:-${HOME}/doculogic/weights}")"
     HOST_PORT="${ENV_HOST_PORT:-8030}"
+    if [ "${ENV_INSTALL_MARKER}" = "1" ] || [ "${ENV_INSTALL_MARKER}" = "true" ] || [ "${ENV_INSTALL_MARKER}" = "TRUE" ]; then
+        WITH_MARKER=true
+    fi
 else
     # 没有 .env 文件时使用默认值
     DATA_DIR="${HOME}/doculogic/data"
@@ -65,9 +95,19 @@ else
     HOST_PORT="8030"
 fi
 
+# 命令行环境变量也可覆盖
+if [ "${INSTALL_MARKER:-0}" = "1" ] || [ "${INSTALL_MARKER:-}" = "true" ]; then
+    WITH_MARKER=true
+fi
+
 echo "📁 数据目录: ${DATA_DIR}"
 echo "📦 模型目录: ${MODEL_DIR}"
 echo "🌐 访问端口: ${HOST_PORT}"
+if [ "$WITH_MARKER" = true ]; then
+    echo "🧩 Marker: 构建时安装（INSTALL_MARKER=1）"
+else
+    echo "🧩 Marker: 默认不安装（需要时: ./docker/deploy.sh --with-marker 或 ./docker/install-marker.sh）"
+fi
 echo ""
 
 # 0. 检查 Docker 权限
@@ -83,14 +123,6 @@ echo ""
 
 # 1. 检查并提示目录结构
 echo "[1/7] 检查数据目录..."
-
-# 📌 验证 DATA_DIR 路径解析是否正确（避免波浪号 ~ 未展开的问题）
-if [[ "$DATA_DIR" == ~* ]]; then
-    echo "⚠️  警告：DATA_DIR 包含波浪号 (~)，可能导致路径解析错误"
-    echo "   当前值: $DATA_DIR"
-    echo "   建议修改 .env 中的 DATA_DIR 为绝对路径，如: ${HOME}/doculogic/data"
-    echo ""
-fi
 
 # 仅检查根目录是否存在，不存在则创建
 if [ ! -d "${DATA_DIR}" ]; then
@@ -170,6 +202,29 @@ else
         echo "✓ JWT_SECRET 已配置"
     fi
 fi
+
+# 同步到 docker/.env，供「cd docker && docker compose ...」直接读取变量替换
+# （deploy.sh 也会 export 到环境；两处保持一致可避免端口/密钥漂移）
+cp -f .env docker/.env
+# 将已展开的绝对路径写回 docker/.env，避免 compose 把 ~ 当字面路径
+if grep -qE '^DATA_DIR=' docker/.env; then
+    sed -i "s|^DATA_DIR=.*|DATA_DIR=${DATA_DIR}|" docker/.env
+else
+    echo "DATA_DIR=${DATA_DIR}" >> docker/.env
+fi
+if grep -qE '^MODEL_DIR=' docker/.env; then
+    sed -i "s|^MODEL_DIR=.*|MODEL_DIR=${MODEL_DIR}|" docker/.env
+else
+    echo "MODEL_DIR=${MODEL_DIR}" >> docker/.env
+fi
+if [ "$WITH_MARKER" = true ]; then
+    if grep -qE '^INSTALL_MARKER=' docker/.env; then
+        sed -i "s|^INSTALL_MARKER=.*|INSTALL_MARKER=1|" docker/.env
+    else
+        echo "INSTALL_MARKER=1" >> docker/.env
+    fi
+fi
+echo "✓ 已同步 docker/.env（供 compose 变量替换）"
 echo ""
 
 # 3.5. 数据迁移（智能自动迁移）
@@ -344,6 +399,12 @@ echo ""
 # 5. 构建镜像
 echo "[5/7] 构建 Docker 镜像..."
 cd docker
+if [ "$WITH_MARKER" = true ]; then
+    export INSTALL_MARKER=1
+    echo "📦 构建参数: INSTALL_MARKER=1（将安装 marker-pdf）"
+else
+    export INSTALL_MARKER="${INSTALL_MARKER:-0}"
+fi
 docker compose build
 cd ..
 echo "✓ 镜像构建完成"
@@ -499,6 +560,11 @@ echo "  停止服务:   cd docker && docker compose down"
 echo "  重启服务:   cd docker && docker compose restart"
 echo "  进入容器:   docker exec -it doculogic bash"
 echo "  Redis CLI:  docker exec -it doculogic-redis redis-cli"
+if [ "$WITH_MARKER" != true ]; then
+    echo "  安装 Marker: ./docker/install-marker.sh   # 可选 GPL 引擎，容器重建后需重装"
+fi
+echo ""
+echo "配置文件: 项目根目录 .env（deploy.sh 会同步到 docker/.env）"
 
 # 根据 DATABASE_TYPE 显示对应的数据库管理命令
 case "$DATABASE_TYPE" in

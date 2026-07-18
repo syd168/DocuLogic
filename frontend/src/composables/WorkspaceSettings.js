@@ -363,7 +363,15 @@ export function useWorkspaceSettings({
       if (!payload.sms_http_secret || !String(payload.sms_http_secret).trim()) delete payload.sms_http_secret
       const { data: updatedSettings } = await http.put('/api/admin/settings', payload)
       if (updatedSettings) applyAdminSettings(updatedSettings)
-      ElMessage.success('已保存')
+      const sw = updatedSettings?.converter_switch
+      if (sw && sw.from && sw.to && sw.from !== sw.to) {
+        ElMessage.success(
+          `已保存：解析器 ${sw.from} → ${sw.to}，已自动卸载其它引擎以释放显存`
+        )
+        await checkModelStatus()
+      } else {
+        ElMessage.success('已保存')
+      }
     } catch (e) {
       ElMessage.error(e.response?.data?.detail || e.message)
     } finally {
@@ -518,17 +526,22 @@ export function useWorkspaceSettings({
       await checkModelStatus()
       await loadSettings()
     } catch (e) {
-      const errorMsg = e.response?.data?.detail || e.message
+      const errorMsg = String(e.response?.data?.detail || e.message || '加载失败')
       const hideBottomReloadError =
-        String(errorMsg).includes('模型文件夹不存在') ||
-        String(errorMsg).includes('模型不存在') ||
-        String(errorMsg).includes('模型已损坏')
+        errorMsg.includes('模型文件夹不存在') ||
+        errorMsg.includes('模型不存在') ||
+        errorMsg.includes('模型已损坏')
+      // 去掉可能重复的前缀；取首行完整提示（勿用 split('：')，会误截成许可说明等尾句）
+      const cleaned = errorMsg.replace(/^重新加载失败[：:]\s*/u, '').trim()
+      const firstLine = cleaned.split(/\r?\n/)[0] || cleaned
       const shortMsg =
-        errorMsg.includes('No such file')
+        firstLine.includes('No such file')
           ? '模型文件不存在'
-          : errorMsg.includes('CUDA out of memory')
+          : firstLine.includes('CUDA out of memory')
             ? '显存不足'
-            : errorMsg.split('：').pop()?.slice(0, 50) || '加载失败'
+            : firstLine.length > 120
+              ? `${firstLine.slice(0, 120)}…`
+              : firstLine
       reloadError.value = hideBottomReloadError ? '' : `❌ ${shortMsg}`
       ElMessage.error(`重新加载失败：${shortMsg}`)
     } finally {
@@ -547,7 +560,7 @@ export function useWorkspaceSettings({
     }
     try {
       await ElMessageBox.confirm(
-        '确定要卸载模型吗？这将释放显存，下次上传文档时将自动重新加载。',
+        '确定要卸载当前解析器的运行时模型吗？这将释放显存；下次解析时会自动重新加载。',
         '确认卸载',
         { type: 'warning', confirmButtonText: '卸载', cancelButtonText: '取消' }
       )

@@ -85,7 +85,7 @@ docker compose down && docker compose up -d --build
 
 #### 环境变量配置
 
-编辑 `docker/.env` 文件：
+编辑项目根目录 `.env` 文件（由 `.env.example` 复制；`deploy.sh` 会同步到 `docker/.env` 供 compose 使用）：
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
@@ -93,8 +93,17 @@ docker compose down && docker compose up -d --build
 | `GPU_COUNT` | GPU 数量（0=禁用） | `1` |
 | `DATABASE_TYPE` | 数据库类型 | `sqlite` |
 | `MEM_LIMIT` | 内存限制 | `8g` |
+| `INSTALL_MARKER` | 构建时是否安装 Marker（GPL） | `0` |
 
-> 📖 **Docker 专项补充**（宿主机 GPU、Windows 挂载、`docker/.env` 全量、数据目录与排障）：[docker/README.md](docker/README.md) — **通用快速开始与本表以本文为准**。
+```bash
+# 可选：部署时一并安装 Marker
+./docker/deploy.sh --with-marker
+
+# 或默认部署后，在运行中的容器内安装（重建镜像后需重装）
+./docker/install-marker.sh
+```
+
+> 📖 **Docker 专项补充**（宿主机 GPU、Windows 挂载、环境变量全量、数据目录与排障、Marker）：[docker/README.md](docker/README.md) — **通用快速开始与本表以本文为准**。
 
 ---
 
@@ -171,7 +180,9 @@ DocuLogic/
 │   └── convert_sqlite_to_other.py  # 数据库转换工具
 ├── docker/                  # Docker 部署
 │   ├── deploy.sh            # 一键部署脚本
-│   └── docker-compose.yml   # 服务编排
+│   ├── install-marker.sh    # 容器内安装可选 Marker
+│   ├── docker-compose.yml   # 服务编排
+│   └── Dockerfile           # 多阶段构建（INSTALL_MARKER 可选）
 ├── frontend/                # Vue 3 前端
 │   └── src/views/           # 页面组件
 ├── web/                     # FastAPI 后端
@@ -257,17 +268,23 @@ cd docker && docker compose down && docker compose up -d --build
 
 ### 可选：启用 Marker 解析器
 
-Marker（[marker-pdf](https://github.com/VikParuchuri/marker)）通过「插件 + pip」接入，**不包含在默认依赖与 Docker 镜像中**。
+Marker（[marker-pdf](https://github.com/VikParuchuri/marker)）通过「插件 + pip」接入，**不包含在默认依赖与默认 Docker 镜像中**（见 [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)）。
 
 ```bash
-# 本地
+# 本地开发
 pip install -r requirements-marker.txt
 # 重启后端后，管理后台「解析器配置」→「切换解析器」可选 Marker
 
-# Docker（示例：进入已运行容器安装；重建镜像后需重新安装或自建衍生镜像）
-docker exec -it doculogic pip install -r /app/requirements-marker.txt
-docker restart doculogic
+# Docker — 方式 A：部署时写入镜像（重建后仍保留）
+./docker/deploy.sh --with-marker
+# 或: INSTALL_MARKER=1 ./docker/deploy.sh
+# 或: cd docker && INSTALL_MARKER=1 docker compose build && docker compose up -d
+
+# Docker — 方式 B：已运行容器内安装（重建镜像后需重装）
+./docker/install-marker.sh
 ```
+
+Marker 模型与 Logics 一样落在 **`weights/marker`**（Docker：宿主机 `MODEL_DIR/marker` → 容器 `/app/weights/marker`，由环境变量 `MODEL_CACHE_DIR` 控制）。
 
 启用即表示接受 Marker 的 **GPL-3.0**（代码）与 **OpenRAIL-M**（模型）等上游条款。请勿将 `converts/models/marker` 源码提交进本仓库。
 

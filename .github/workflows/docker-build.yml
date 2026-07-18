@@ -39,6 +39,10 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
+        file: docker/Dockerfile
+        # 默认发行镜像不捆绑 Marker（GPL）；需要时本地构建加 --build-arg INSTALL_MARKER=1
+        build-args: |
+          INSTALL_MARKER=0
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}

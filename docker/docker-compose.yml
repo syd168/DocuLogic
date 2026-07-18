@@ -4,6 +4,11 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        # PyPI 镜像（国内默认华为云；海外可改为 https://pypi.org/simple）
+        PIP_INDEX: ${PIP_INDEX:-https://mirrors.huaweicloud.com/repository/pypi/simple}
+        # 构建时是否安装 Marker（GPL）。默认 0；设为 1 需接受 LICENSE-THIRD-PARTY.md
+        INSTALL_MARKER: ${INSTALL_MARKER:-0}
     container_name: doculogic
     restart: unless-stopped
     
@@ -43,6 +48,8 @@ services:
       - ALLOW_START_WITHOUT_MODEL=${ALLOW_START_WITHOUT_MODEL:-1}
       # HuggingFace 镜像（ModelScope 失败回退下载时使用）
       - HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+      # Marker/surya 模型目录（与 Logics 同挂 MODEL_DIR→/app/weights）
+      - MODEL_CACHE_DIR=${MODEL_CACHE_DIR:-/app/weights/marker}
       # 模型下载调优（.env 中配置后需在此声明才会传入容器）
       - MODEL_DOWNLOAD_WORKERS=${MODEL_DOWNLOAD_WORKERS:-4}
       - HF_HUB_DOWNLOAD_TIMEOUT=${HF_HUB_DOWNLOAD_TIMEOUT:-600}

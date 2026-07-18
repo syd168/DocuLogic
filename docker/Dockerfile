@@ -28,6 +28,7 @@ FROM python:3.10-slim
 RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
     bash -c 'apt-get update && apt-get install -y \
     nginx \
+    curl \
     cron \
     sqlite3 \
     default-mysql-client \
@@ -43,10 +44,14 @@ WORKDIR /app
 
 # 复制 Python 依赖并安装
 COPY requirements.txt .
+COPY requirements-marker.txt .
 
 # 使用华为源；构建时清除代理，避免 pip 经不可达的 buildkit 代理访问国内镜像
 # PyTorch 包体积大（~900MB），单独安装并放宽超时/重试，避免 Read timed out
 ARG PIP_INDEX=https://mirrors.huaweicloud.com/repository/pypi/simple
+# 可选：构建时安装 Marker（GPL）。默认 0；设为 1 或 true 时安装 requirements-marker.txt
+# 例：docker compose build --build-arg INSTALL_MARKER=1
+ARG INSTALL_MARKER=0
 RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
     pip install --no-cache-dir --default-timeout=1000 --retries 10 \
     torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 \
@@ -54,11 +59,18 @@ RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -
 RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
     pip install --no-cache-dir --default-timeout=300 --retries 5 \
     -r requirements.txt -i ${PIP_INDEX}
+RUN if [ "${INSTALL_MARKER}" = "1" ] || [ "${INSTALL_MARKER}" = "true" ] || [ "${INSTALL_MARKER}" = "TRUE" ]; then \
+      echo ">>> INSTALL_MARKER=${INSTALL_MARKER}: installing marker-pdf (GPL-3.0)..." && \
+      env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+        pip install --no-cache-dir --default-timeout=600 --retries 5 \
+        -r requirements-marker.txt -i ${PIP_INDEX} ; \
+    else \
+      echo ">>> INSTALL_MARKER=${INSTALL_MARKER}: skip marker-pdf (default; see LICENSE-THIRD-PARTY.md)" ; \
+    fi
 
 # 复制后端代码
 COPY web/ ./web/
 COPY web_server.py .
-COPY requirements-marker.txt .
 # 复制文档解析器中间件/插件/配置（运行时必需）
 COPY converts/middleware/ ./converts/middleware/
 COPY converts/plugins/ ./converts/plugins/

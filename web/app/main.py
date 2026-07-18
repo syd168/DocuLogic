@@ -682,24 +682,51 @@ async def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 懒加载：首次使用时才加载模型
-    try:
-        local_model = ensure_model_loaded()
-    except Exception as e:
-        raise HTTPException(
-            status_code=503, 
-            detail=(
-                f"模型加载失败，无法解析文档\n\n"
-                f"错误信息：{str(e)[:200]}\n\n"
-                f"可能原因：\n"
-                f"1. 模型尚未下载\n"
-                f"2. 模型加载失败\n\n"
-                f"解决方法：\n"
-                f"• 前往「系统设置」→「模型管理」\n"
-                f"• 点击「后台下载到模型目录」自动下载\n"
-                f"• 或点击「重新加载模型」尝试重新加载"
-            )
-        ) from e
+    # 仅 Logics 需要在上传时预检/懒加载；Marker 等插件在后台任务中自行加载
+    from .models import AppSettings
+    from converts.middleware.registry import normalize_engine_id
+
+    settings_row = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    engine_id = normalize_engine_id(
+        getattr(settings_row, "default_converter_id", None) or "logics-parsing-v2"
+    ) or "logics-parsing-v2"
+
+    if engine_id == "logics-parsing-v2":
+        try:
+            ensure_model_loaded()
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"模型加载失败，无法解析文档\n\n"
+                    f"错误信息：{str(e)[:200]}\n\n"
+                    f"可能原因：\n"
+                    f"1. 模型尚未下载\n"
+                    f"2. 模型加载失败\n\n"
+                    f"解决方法：\n"
+                    f"• 前往「系统设置」→「模型管理」\n"
+                    f"• 点击「后台下载到模型目录」自动下载\n"
+                    f"• 或点击「重新加载模型」尝试重新加载"
+                ),
+            ) from e
+    elif engine_id == "marker":
+        # 提前给出可操作错误，避免任务进后台才失败
+        try:
+            from converts.plugins.marker.plugin import _require_marker
+
+            _require_marker()
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"Marker 解析器不可用\n\n"
+                    f"错误信息：{str(e)[:300]}\n\n"
+                    f"解决方法：\n"
+                    f"• pip install -r requirements-marker.txt\n"
+                    f"• 重启后端后再试\n"
+                    f"• 或切换回 logics-parsing-v2 并保存"
+                ),
+            ) from e
 
     allowed_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp", ".pdf"}
     file_extension = Path(file.filename).suffix.lower()
@@ -1109,9 +1136,9 @@ async def list_jobs(
             and has_files
         )
         
-        # 检查是否有完整结果 ZIP 文件（separate 模式生成）
+        # 检查是否有完整结果 ZIP（separate 模式；兼容 Marker 旧版 _download.zip）
         zip_path = job_dir / f"{r.job_id}_result.zip"
-        has_result_zip = zip_path.is_file()
+        has_result_zip = zip_path.is_file() or (job_dir / f"{r.job_id}_download.zip").is_file()
         
         item = {
             "job_id": r.job_id,
@@ -1411,6 +1438,11 @@ async def download_result(
         raise HTTPException(status_code=400, detail="Invalid file type")
     if file_type == "result":
         file_path = job_dir / f"{job_id}_result.zip"
+        if not file_path.exists():
+            # Marker 旧版曾写 _download.zip，与下载 API 约定不一致
+            alt = job_dir / f"{job_id}_download.zip"
+            if alt.exists():
+                file_path = alt
         media = "application/zip"
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="File not found")

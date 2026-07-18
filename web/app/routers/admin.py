@@ -57,6 +57,12 @@ def _friendly_model_reload_message(exc: BaseException) -> str:
     # 对管理端重载操作统一提示为模型文件缺失/损坏，更贴近用户可操作项。
     if "未配置模型路径" in raw or "模型目录不存在" in raw or "模型文件不完整" in raw:
         return "模型文件夹不存在、模型不存在或模型已损坏。请先下载/恢复模型文件后再重试。"
+    if "未安装可选依赖 Marker" in raw or "No module named 'marker'" in raw:
+        return (
+            "未安装可选依赖 Marker（marker-pdf）。"
+            "Docker: ./docker/install-marker.sh 或 ./docker/deploy.sh --with-marker；"
+            "本地: pip install -r requirements-marker.txt"
+        )
     msg = str(exc)
     if len(msg) > 500:
         return msg[:500] + "…"
@@ -306,11 +312,47 @@ async def admin_put_settings(
                 status_code=400, 
                 detail=validation["warning"]
             )
+
+    # 解析器切换：先卸载非目标引擎，再落库（避免双引擎占显存）
+    converter_switch = None
+    if "default_converter_id" in data:
+        from converts.middleware.registry import normalize_engine_id, list_plugins
+        from ..converter_runtime import unload_engines_except
+
+        row = get_app_settings_row(db)
+        old_id = normalize_engine_id(
+            getattr(row, "default_converter_id", None) or "logics-parsing-v2"
+        ) or "logics-parsing-v2"
+        new_id = normalize_engine_id(str(data.get("default_converter_id") or "").strip())
+        if not new_id:
+            raise HTTPException(status_code=400, detail="default_converter_id 不能为空")
+        if new_id not in list_plugins():
+            raise HTTPException(status_code=400, detail=f"default_converter_id '{new_id}' 未注册或不存在")
+        if new_id != old_id:
+            try:
+                unload_info = unload_engines_except(new_id)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            converter_switch = {
+                "from": old_id,
+                "to": new_id,
+                **unload_info,
+            }
+            _log.info(
+                "解析器切换 %s → %s，已卸载其它引擎: %s",
+                old_id,
+                new_id,
+                unload_info.get("actions"),
+            )
     
     try:
-        return update_settings_from_body(db, data)
+        result = update_settings_from_body(db, data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if converter_switch is not None:
+        result = {**result, "converter_switch": converter_switch}
+    return result
 
 
 @router.post("/model/download")
@@ -351,10 +393,13 @@ async def admin_get_model_status(
 ):
     """获取当前模型下载和加载状态"""
     from .. import main as main_module
+    from ..converter_runtime import is_engine_model_loaded
+
     row = get_app_settings_row(db)
     eid = (engine_id or getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2").strip()
 
     m = main_module.get_inference_model()
+    engine_loaded = is_engine_model_loaded(eid)
     task_id = _engine_download_task.get(eid, "")
     download = {
         "is_downloading": False,
@@ -382,7 +427,8 @@ async def admin_get_model_status(
 
     return {
         "ok": True,
-        "model_loaded": m is not None,
+        "model_loaded": engine_loaded,
+        "logics_model_loaded": m is not None,
         "downloading": download["is_downloading"],
         "download_success": download["success"],
         "download_error": download["error"],
@@ -402,6 +448,8 @@ async def admin_reload_model(
 ):
     """手动重新加载模型（先卸载再加载）"""
     from .. import main as main_module
+    from ..converter_runtime import LOGICS_ENGINE_ID, is_engine_model_loaded, unload_engines_except
+    from converts.middleware.registry import get_plugin
 
     # 审计日志：记录谁在什么时候执行了模型重载
     _log.info(f"🔐 管理员 [{current_user.username}] (ID:{current_user.id}) 请求重新加载模型")
@@ -413,15 +461,29 @@ async def admin_reload_model(
             detail="下载任务正在进行中，请等待下载完成后再尝试重新加载模型"
         )
     
-    _log.info("开始重新加载模型...")
+    row = get_app_settings_row(db)
+    engine_id = getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2"
+    _log.info("开始重新加载模型 [engine_id: %s]...", engine_id)
     
     try:
-        # 获取当前解析器 ID
-        row = get_app_settings_row(db)
-        engine_id = getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2"
-        _log.info(f"正在从配置加载模型 [engine_id: {engine_id}]...")
+        # 先卸掉其它引擎，再加载当前引擎
+        unload_engines_except(engine_id)
 
-        main_module.reload_model_from_settings()
+        if engine_id == LOGICS_ENGINE_ID:
+            main_module.reload_model_from_settings()
+            loaded = main_module.get_inference_model() is not None
+        else:
+            plugin = get_plugin(engine_id)
+            unload_fn = getattr(plugin, "unload_runtime_models", None)
+            if callable(unload_fn):
+                unload_fn()
+            ensure = getattr(plugin, "ensure_runtime_models", None)
+            if not callable(ensure):
+                raise RuntimeError(
+                    f"解析器 {engine_id} 不支持预热加载，请直接上传文档触发懒加载"
+                )
+            ensure()
+            loaded = is_engine_model_loaded(engine_id)
         
     except Exception as e:
         _log.exception(f"重新加载模型失败 [engine_id: {engine_id}]")
@@ -429,21 +491,21 @@ async def admin_reload_model(
         error_msg = _friendly_model_reload_message(e)
         raise HTTPException(status_code=code, detail=f"重新加载失败：{error_msg}") from None
     
-    m = main_module.get_inference_model()
-    
-    if m is not None:
+    if loaded:
         _log.info(f"✅ 模型重新加载成功 [engine_id: {engine_id}]")
         return {
             "ok": True,
             "model_loaded": True,
-            "message": "✅ 模型已成功重新加载\n\n模型已就绪，可以开始解析文档了！",
+            "engine_id": engine_id,
+            "message": f"✅ {engine_id} 模型已成功重新加载\n\n可以开始解析文档了！",
         }
     else:
-        _log.warning("⚠️ 模型重新加载后仍为 None")
+        _log.warning("⚠️ 模型重新加载后仍未就绪 engine=%s", engine_id)
         return {
             "ok": True,
             "model_loaded": False,
-            "message": "⚠️ 模型目录不存在或加载失败\n\n请检查：\n1. 模型路径是否正确\n2. 模型文件是否完整\n3. 是否有足够的显存/内存",
+            "engine_id": engine_id,
+            "message": "⚠️ 模型未就绪\n\n请检查：\n1. 模型路径/依赖是否正确\n2. 模型文件是否完整\n3. 是否有足够的显存/内存\n4. Marker 是否已 pip install",
         }
 
 
@@ -452,8 +514,8 @@ async def admin_unload_model(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ):
-    """手动卸载模型以释放显存"""
-    from .. import main as main_module
+    """手动卸载当前默认解析器的运行时模型以释放显存"""
+    from ..converter_runtime import unload_current_engine
 
     # 审计日志：记录谁在什么时候执行了模型卸载
     _log.info(f"🔐 管理员 [{current_user.username}] (ID:{current_user.id}) 请求卸载模型")
@@ -464,45 +526,23 @@ async def admin_unload_model(
             status_code=400, 
             detail="下载任务正在进行中，请等待下载完成后再尝试卸载模型"
         )
-    
-    # 检查模型是否已加载
-    current_model = main_module.get_inference_model()
-    if current_model is None:
-        return {
-            "ok": True,
-            "model_loaded": False,
-            "message": "ℹ️ 模型未加载，无需卸载",
-        }
-    
-    _log.info("开始卸载模型以释放显存...")
 
+    row = get_app_settings_row(db)
+    engine_id = getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2"
     try:
-        # 获取当前解析器 ID
-        row = get_app_settings_row(db)
-        engine_id = getattr(row, "default_converter_id", "logics-parsing-v2") or "logics-parsing-v2"
-        
-        if not main_module.unload_model(wait_for_inference=False):
-            raise HTTPException(
-                status_code=409,
-                detail="仍有解析任务在使用模型，请等待任务完成或停止后再卸载。",
-            )
-        _log.info(f"✅ 模型已成功卸载 [engine_id: {engine_id}]")
-
-        return {
-            "ok": True,
-            "model_loaded": False,
-            "message": (
-                "✅ 模型已从内存中卸载\n\n"
-                "大模型权重已释放；nvidia-smi 中仍可能看到本服务进程，"
-                "但「显存占用」应明显下降（PyTorch 会保留少量缓存池属正常现象）。\n\n"
-                "下次上传文档时将自动重新加载模型。"
-            ),
-        }
-    except HTTPException:
-        raise
+        info = unload_current_engine(engine_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        _log.exception("卸载模型失败")
-        raise HTTPException(status_code=500, detail=f"卸载失败：{str(e)}") from None
+        _log.exception("卸载模型失败 engine=%s", engine_id)
+        raise HTTPException(status_code=500, detail=f"卸载失败：{e}") from e
+
+    return {
+        "ok": True,
+        "model_loaded": False,
+        "engine_id": engine_id,
+        "message": info.get("message") or "✅ 模型已卸载",
+    }
 
 
 def _other_active_admin_count(db: Session, exclude_id: int) -> int:

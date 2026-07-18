@@ -7,7 +7,7 @@
   "download": {
     "mode": "warmup",
     "dest_dir": "weights/marker",
-    "notes": "点击下载将预热并缓存 surya/Marker 依赖模型（通常写入本机 cache）"
+    "notes": "下载到 weights/marker（Docker: /app/weights/marker，与 Logics 同 MODEL_DIR 卷）"
   },
   "_meta": {
     "engine_id": "marker",
@@ -24,7 +24,7 @@
       "download": "模型预热说明"
     },
     "hints": {
-      "download": "不捆绑进默认发行物；首次预热或首次解析会自动拉取模型。"
+      "download": "模型写入 weights/marker（与 Logics 同卷）；首次预热或首次解析会自动拉取。"
     }
   }
 }

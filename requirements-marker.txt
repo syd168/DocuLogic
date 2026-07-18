@@ -6,9 +6,10 @@
 # 安装：
 #   pip install -r requirements-marker.txt
 #
-# Docker（可选，勿写入默认镜像）：
-#   docker compose exec doculogic pip install -r requirements-marker.txt
-#   # 或构建自定义镜像时自行 COPY 并 pip install
+# Docker（可选，勿写入默认镜像）
+#   ./docker/install-marker.sh
+#   # 或构建时: ./docker/deploy.sh --with-marker  /  INSTALL_MARKER=1
+#   # 或: docker compose exec doculogic pip install -r requirements-marker.txt
 #
 # 代码许可：GPL-3.0-or-later（marker-pdf）
 # 模型许可：OpenRAIL-M（及相关 surya 权重条款）

@@ -13,8 +13,9 @@
 ---
 
 > **与根目录 README 的关系**  
-> 项目简介、核心特性、**Docker 一键部署**（克隆仓库、`./docker/deploy.sh`、访问 **`http://localhost:8030`**、默认账号 **`admin` / `admin123`**）、**部署脚本自动完成项**、**常用 Docker 命令**（`cd docker` 后 `compose up/down/restart`、`docker logs`、`docker exec`、更新重建等），以及 **`docker/.env` 中与根 README 一致的环境变量表**（`HOST_PORT`、`GPU_COUNT`、`DATABASE_TYPE`、`MEM_LIMIT` 等），均以 **[仓库根 README](../README.md)** 为准，本文不再重复展开。  
-> **本文档** 仅补充：Docker 宿主机软件与资源、GPU 容器工具链、**手动编排步骤**、**`docker/.env` 全量说明与示例**、**Windows 卷挂载**、**数据目录结构**、**compose 运维命令**、**Docker 专项 FAQ** 与 **性能 / 安全建议**。
+> 项目简介、核心特性、**Docker 一键部署**（克隆仓库、`./docker/deploy.sh`、访问 **`http://localhost:8030`**、默认账号 **`admin` / `admin123`**）、**部署脚本自动完成项**、**常用 Docker 命令**，以及环境变量表（`HOST_PORT`、`GPU_COUNT`、`DATABASE_TYPE`、`MEM_LIMIT`、`INSTALL_MARKER` 等），均以 **[仓库根 README](../README.md)** 为准，本文不再重复展开。  
+> **配置文件约定**：权威配置为**项目根目录 `.env`**（来自 `.env.example`）；`deploy.sh` 会同步到 `docker/.env`，以便在 `docker/` 目录直接执行 `docker compose`。  
+> **本文档** 仅补充：Docker 宿主机软件与资源、GPU 容器工具链、**手动编排步骤**、**环境变量全量说明**、**可选 Marker 引擎**、**Windows 卷挂载**、**数据目录结构**、**compose 运维命令**、**Docker 专项 FAQ** 与 **性能 / 安全建议**。
 
 ---
 
@@ -23,6 +24,7 @@
 - [快速入口（摘要）](#-快速入口摘要)
 - [环境要求](#-环境要求)
 - [一键部署脚本](#一键部署脚本)
+- [可选引擎 Marker](#-可选引擎-marker)
 - [Windows 部署注意事项](#-windows-部署注意事项)
 - [手动部署](#-手动部署)
 - [配置说明](#-配置说明)
@@ -159,9 +161,28 @@ DATABASE_TYPE=postgresql  # PostgreSQL 16（独立容器）
 # 跳过自动数据迁移
 ./docker/deploy.sh --skip-migration
 
+# 构建时安装可选引擎 Marker（GPL-3.0，见 LICENSE-THIRD-PARTY.md）
+./docker/deploy.sh --with-marker
+
 # 查看帮助
 ./docker/deploy.sh --help
 ```
+
+---
+
+## 🧩 可选引擎 Marker
+
+默认镜像**不安装** `marker-pdf`（GPL）。需要时任选其一：
+
+| 方式 | 命令 | 重建镜像后 |
+|------|------|------------|
+| 构建进镜像 | `./docker/deploy.sh --with-marker` 或 `INSTALL_MARKER=1` | 仍保留 |
+| 运行中安装 | `./docker/install-marker.sh` | **需重装** |
+| 手动 compose | `cd docker && INSTALL_MARKER=1 docker compose build && docker compose up -d` | 仍保留 |
+
+模型文件写入 **`MODEL_CACHE_DIR`**（默认 `/app/weights/marker`），与 Logics 同属宿主机 **`MODEL_DIR`** 挂载卷（如 `~/doculogic/weights/marker`）。旧版若已下载到容器内 `~/.cache/datalab/models`，启动时会自动迁移到该目录。
+
+许可与合规说明见仓库根目录 [LICENSE-THIRD-PARTY.md](../LICENSE-THIRD-PARTY.md)。
 
 ---
 
@@ -236,20 +257,22 @@ Permission denied: '/app/weights'
 
 DocuLogic Docker 容器使用 **`entrypoint.sh`** 作为入口脚本，负责：
 
-1. **加载环境变量**：如果存在 `/app/.env` 文件，会自动加载（作为 docker-compose environment 的补充）
+1. **读取 compose 注入的环境变量**（不依赖容器内 `.env` 文件）
 2. **检查目录结构**：自动创建必要的目录（logs, output, data, backups）
-3. **启动服务**：按顺序启动 Nginx → Cron → FastAPI 后端
+3. **初始化解析器配置卷**：首次挂载空配置目录时，从镜像内置默认配置复制
+4. **启动服务**：按顺序启动 Nginx → Cron → FastAPI 后端
 
 **这意味着：**
-- ✅ 你可以将 `.env` 文件复制到容器中，它会被自动加载
-- ✅ 所有配置优先使用 docker-compose.yml 中定义的环境变量
-- ✅ `.env` 文件仅作为备用配置源
+- ✅ 宿主机配置写在**项目根目录 `.env`**，由 `deploy.sh` 同步到 `docker/.env` 并传入 compose
+- ✅ 容器内以 `docker-compose.yml` 的 `environment` 为准
+- ✅ 可选 Marker 是否已安装会在启动日志中提示
 
 ### 步骤 1：准备数据目录
 
 ```bash
 # 创建数据存储目录（与 compose 中 DATA_DIR / MODEL_DIR 默认值对应时可按需调整）
-mkdir -p ~/doculogic/{weights,output,database,logs,uploads}
+mkdir -p ~/doculogic/data/{output,logs,database/sqlite,backups,converter-configs}
+mkdir -p ~/doculogic/weights
 
 # 设置权限
 chmod -R 755 ~/doculogic
@@ -268,11 +291,15 @@ cd /path/to/DocuLogic
 
 ### 步骤 3：配置环境变量
 
-在 **`docker/`** 目录维护 **`docker/.env`**（与 `./docker/deploy.sh` 一致）。根目录 **`.env.example`** 用于**本机直接跑后端**，路径语义不同，请勿混用。
+权威配置为**项目根目录 `.env`**（`cp .env.example .env`）。`./docker/deploy.sh` 会同步到 `docker/.env`。
+
+手动编排时请先同步：
 
 ```bash
-cd docker
-nano .env
+cp .env.example .env
+# 编辑 .env 后
+cp .env docker/.env
+# 建议将 DATA_DIR / MODEL_DIR 写成绝对路径（勿依赖未展开的 ~）
 ```
 
 **关键配置项（须与当前 `docker-compose.yml` 挂载一致）：**

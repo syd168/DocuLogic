@@ -16,11 +16,31 @@ echo "   • 环境: ${ENVIRONMENT:-development}"
 echo "   • 数据库类型: ${DATABASE_TYPE:-sqlite}"
 echo "   • Redis: ${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
 echo "   • 模型路径: ${MODEL_PATH:-/app/weights/logics-parsing-v2}"
+echo "   • Marker 缓存: ${MODEL_CACHE_DIR:-/app/weights/marker}"
+if python -c "import importlib.util; raise SystemExit(0 if importlib.util.find_spec('marker') else 1)" 2>/dev/null; then
+    echo "   • Marker: 已安装（可选引擎）"
+else
+    echo "   • Marker: 未安装（需要时: ./docker/install-marker.sh 或构建 INSTALL_MARKER=1）"
+fi
 echo ""
 
 # 检查必要的目录和权限
 echo "📁 检查目录结构和权限..."
 mkdir -p /app/logs /app/out /app/web/data /app/backups /app/converts/configs
+mkdir -p "${MODEL_CACHE_DIR:-/app/weights/marker}"
+
+# 将旧版容器内 ~/.cache/datalab/models 迁移到挂载卷（仅当目标几乎为空时）
+LEGACY_MARKER_CACHE="/root/.cache/datalab/models"
+MARKER_CACHE="${MODEL_CACHE_DIR:-/app/weights/marker}"
+if [ -d "${LEGACY_MARKER_CACHE}" ] && [ -d "${MARKER_CACHE}" ]; then
+    # 目标下尚无模型子目录时再迁移，避免覆盖
+    if [ -z "$(ls -A "${MARKER_CACHE}" 2>/dev/null)" ]; then
+        echo "ℹ️  迁移旧 Marker 缓存: ${LEGACY_MARKER_CACHE} → ${MARKER_CACHE}"
+        cp -a "${LEGACY_MARKER_CACHE}/." "${MARKER_CACHE}/" && \
+            echo "✓ Marker 模型已迁移到持久化卷（宿主机 MODEL_DIR/marker）" || \
+            echo "⚠️  Marker 缓存迁移失败，将继续使用默认下载路径"
+    fi
+fi
 
 # 首次挂载空配置卷时，从镜像内置默认配置初始化
 if [ -d /app/converts/configs.defaults ] && [ -z "$(ls -A /app/converts/configs 2>/dev/null)" ]; then
@@ -30,7 +50,7 @@ fi
 
 # 检查关键挂载点是否可写
 WRITABLE=true
-for dir in /data/output /app/logs /app/web/data /app/backups; do
+for dir in /data/output /app/logs /app/web/data /app/backups "${MODEL_CACHE_DIR:-/app/weights/marker}"; do
     if [ ! -w "$dir" ]; then
         echo "❌ 目录不可写: $dir"
         WRITABLE=false

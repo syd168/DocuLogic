@@ -1,0 +1,16 @@
+# ============================================
+# 可选依赖：Marker 文档解析引擎（GPL-3.0）
+# ============================================
+# 默认不安装。启用后请阅读 LICENSE-THIRD-PARTY.md。
+#
+# 安装：
+#   pip install -r requirements-marker.txt
+#
+# Docker（可选，勿写入默认镜像）：
+#   docker compose exec doculogic pip install -r requirements-marker.txt
+#   # 或构建自定义镜像时自行 COPY 并 pip install
+#
+# 代码许可：GPL-3.0-or-later（marker-pdf）
+# 模型许可：OpenRAIL-M（及相关 surya 权重条款）
+# ============================================
+marker-pdf>=1.10.0,<2.0.0

@@ -1,0 +1,65 @@
+# Git / VCS
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs / runtime / data
+logs/
+*.log
+.run/
+out/
+data/
+*.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docs (镜像不需要)
+doc/
+.github/
+
+# Tests
+tests/
+test/
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Weights（通过 volume 挂载）
+weights/
+converts/models/logics-parsingv2/weights/
+
+# 可选引擎上游源码不得打入默认镜像（插件 + pip，见 LICENSE-THIRD-PARTY.md）
+converts/models/marker/

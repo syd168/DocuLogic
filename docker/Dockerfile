@@ -58,12 +58,14 @@ RUN env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -
 # 复制后端代码
 COPY web/ ./web/
 COPY web_server.py .
+COPY requirements-marker.txt .
 # 复制文档解析器中间件/插件/配置（运行时必需）
 COPY converts/middleware/ ./converts/middleware/
 COPY converts/plugins/ ./converts/plugins/
 COPY converts/configs/ ./converts/configs/
 COPY converts/configs/ ./converts/configs.defaults/
 # 复制本地预置文档解析器源码目录（由部署方提前下载，不纳入 Git）
+# 注意：converts/models/marker 由根目录 .dockerignore 排除，不进入默认镜像
 COPY converts/models/ ./converts/models/
 
 # 复制前端构建产物到 Nginx

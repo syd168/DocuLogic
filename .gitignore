@@ -12,3 +12,5 @@ logs/
 weights/
 # 文档解析器源码目录由部署方本地准备，不提交到 Git/GitHub
 converts/models/
+# 显式排除 Marker 上游仓库（即使误调整 ignore 也不应入库）
+converts/models/marker/

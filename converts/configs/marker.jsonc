@@ -1,0 +1,30 @@
+{
+  "output_format": "markdown",
+  "force_ocr": false,
+  "use_llm": false,
+  "disable_image_extraction": false,
+  "max_pdf_pages": 50,
+  "download": {
+    "mode": "warmup",
+    "dest_dir": "weights/marker",
+    "notes": "点击下载将预热并缓存 surya/Marker 依赖模型（通常写入本机 cache）"
+  },
+  "_meta": {
+    "engine_id": "marker",
+    "version": "1.0",
+    "description": "可选解析器：Marker（marker-pdf）。需 pip install -r requirements-marker.txt。代码 GPL-3.0，模型 OpenRAIL-M。",
+    "optional": true
+  },
+  "_ui": {
+    "order": ["output_format", "force_ocr", "use_llm", "max_pdf_pages", "download"],
+    "labels": {
+      "output_format": "输出格式",
+      "force_ocr": "强制 OCR",
+      "use_llm": "启用 LLM 增强",
+      "download": "模型预热说明"
+    },
+    "hints": {
+      "download": "不捆绑进默认发行物；首次预热或首次解析会自动拉取模型。"
+    }
+  }
+}

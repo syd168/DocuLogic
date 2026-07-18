@@ -253,9 +253,28 @@ cd docker && docker compose down && docker compose up -d --build
 
 本项目采用 Apache 2.0 许可证。详见 [LICENSE](LICENSE) 文件。
 
+可选第三方引擎（如 Marker）的许可与启用方式见 [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)。**默认发行物不捆绑 Marker。**
+
+### 可选：启用 Marker 解析器
+
+Marker（[marker-pdf](https://github.com/VikParuchuri/marker)）通过「插件 + pip」接入，**不包含在默认依赖与 Docker 镜像中**。
+
+```bash
+# 本地
+pip install -r requirements-marker.txt
+# 重启后端后，管理后台「解析器配置」→「切换解析器」可选 Marker
+
+# Docker（示例：进入已运行容器安装；重建镜像后需重新安装或自建衍生镜像）
+docker exec -it doculogic pip install -r /app/requirements-marker.txt
+docker restart doculogic
+```
+
+启用即表示接受 Marker 的 **GPL-3.0**（代码）与 **OpenRAIL-M**（模型）等上游条款。请勿将 `converts/models/marker` 源码提交进本仓库。
+
 ## 🙏 致谢
 
 - [Logics-Parsing-v2](https://github.com/alibaba/Logics-Parsing) - 阿里巴巴开源的文档解析模型
+- [Marker](https://github.com/VikParuchuri/marker) - 可选文档转 Markdown/HTML/JSON 引擎（需单独安装）
 - [FastAPI](https://fastapi.tiangolo.com/) - 高性能 Python Web 框架
 - [Vue 3](https://vuejs.org/) - 渐进式 JavaScript 框架
 
